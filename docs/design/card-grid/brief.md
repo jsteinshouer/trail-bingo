@@ -60,7 +60,7 @@ In the mockup, the orange "Mockup only" box in the detail (Mark Verified / Mark 
 
 ## Celebrations
 
-- **Bingo:** the Sighting photo develops (about 0.7 s), the trail line draws across the completed line (about 0.9 s), the sheet gives a small shake, the phone vibrates (`[40, 60, 40]`), and a purple revision stamp reads "BINGO" with "First line on the Elkhorn Card" for about 2.6 s, then clears on its own. No sound. Play continues.
+- **Bingo:** the Sighting photo develops (about 0.7 s), the trail line draws across the completed line (about 0.9 s), the sheet gives a small shake, the phone vibrates (`[40, 60, 40]`), and a purple revision stamp reads "BINGO" with "First Bingo on the Elkhorn Card" for about 2.6 s, then clears on its own. No sound. Play continues.
 - **Blackout:** a larger stamp ("BLACKOUT · Photorevised · October 2026") over a Card that is now all photos. It stays until tapped, so the family can look at it together.
 - **Reduced motion:** no developing, line drawing or scaling. The stamp appears and disappears without animating.
 

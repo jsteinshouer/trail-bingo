@@ -1,0 +1,45 @@
+import type { Square } from "../game";
+
+export type Kind = "tree" | "plant" | "fungus" | "animal";
+
+export const KIND_LABEL: Record<Kind, string> = {
+  tree: "Tree or shrub",
+  plant: "Plant or wildflower",
+  fungus: "Fungus or lichen",
+  animal: "Animal",
+};
+
+// Map-style legend symbols, drawn in contour brown.
+const KIND_PATHS: Record<Kind, string> = {
+  tree: '<circle cx="12" cy="9.5" r="5.5"/><path d="M12 15v6"/>',
+  plant: '<path d="M5 20.5h14M12 20.5V8M12 20.5 7 12.5M12 20.5l5-8M12 20.5 9.2 10M12 20.5 14.8 10"/>',
+  fungus: '<path d="M4 13.5a8 6.5 0 0 1 16 0Z"/><path d="M10 13.5v6.5h4v-6.5"/>',
+  animal:
+    '<ellipse cx="12" cy="16" rx="4.2" ry="3.4"/><circle cx="6.2" cy="10.6" r="1.7"/><circle cx="9.8" cy="6.8" r="1.7"/><circle cx="14.2" cy="6.8" r="1.7"/><circle cx="17.8" cy="10.6" r="1.7"/>',
+};
+
+export const kindOf = (square: Exclude<Square, { kind: "wildcard" }>): Kind =>
+  square.kind === "animal" ? "animal" : square.group;
+
+/** The legend symbol for a Square: a kind glyph, or the triangulation station for the Wildcard. */
+export function glyph(square: Square): string {
+  if (square.kind === "wildcard") return TRIG;
+  return `<svg class="glyph" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${KIND_PATHS[kindOf(square)]}</svg>`;
+}
+
+const TRIG =
+  '<svg class="glyph" viewBox="0 0 16 14" aria-hidden="true"><path d="M8 1 15 13H1Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="8" cy="9" r="1.5" fill="currentColor"/></svg>';
+
+/** Verified: a crisp printed check. */
+export const ICON_VERIFIED =
+  '<svg width="60%" height="60%" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 5 9.5 10.5 2.5" fill="none" stroke="#fdfdfb" stroke-width="2.4" stroke-linecap="square"/></svg>';
+
+/** Confirmed: a hand-pencilled tick. */
+export const ICON_CONFIRMED =
+  '<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true"><path d="M3.5 13.2c1.6.9 3.1 2.6 4.4 5.1 2.4-6.3 6.6-11.3 12.6-14.6" fill="none" stroke="#fdfdfb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/><path d="M3.5 13.2c1.6.9 3.1 2.6 4.4 5.1 2.4-6.3 6.6-11.3 12.6-14.6" fill="none" stroke="#5c2170" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+export const ICON_CLOSE =
+  '<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M5 5l12 12M17 5 5 17" stroke="currentColor" stroke-width="2"/></svg>';
+
+export const ICON_IMPRINT =
+  '<svg width="11" height="10" viewBox="0 0 16 14" aria-hidden="true"><path d="M8 1 15 13H1Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';

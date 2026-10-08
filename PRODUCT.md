@@ -10,7 +10,7 @@ Installable PWA targeting Android Chrome. iOS / Safari is not a target for this 
 
 ## Stack
 
-Vite + TypeScript, no UI framework, Vitest (decided in `.scratch/trail-bingo/spec.md`). Model inference runs in a Web Worker. The throwaway spike lives in `spike/`; the real app is not scaffolded yet (ticket 02).
+Vite + TypeScript, no UI framework, Vitest (decided in `.scratch/trail-bingo/spec.md`). Model inference runs in a Web Worker. The throwaway spike lives in `spike/`; the real app is at the repo root (`src/game/` is the game module, `src/ui/` the screens).
 
 ## Users
 

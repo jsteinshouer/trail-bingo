@@ -1,0 +1,331 @@
+/* Self-hosted fonts (SIL OFL, see fonts/OFL.txt): nothing loads from the network at play time. */
+@font-face { font-family: "Barlow Condensed"; src: url("./fonts/BarlowCondensed-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("./fonts/BarlowCondensed-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("./fonts/BarlowCondensed-700.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Barlow"; src: url("./fonts/Barlow-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Barlow"; src: url("./fonts/Barlow-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Barlow"; src: url("./fonts/Barlow-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Barlow"; src: url("./fonts/Barlow-400-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Barlow"; src: url("./fonts/Barlow-500-italic.woff2") format("woff2"); font-weight: 500; font-style: italic; font-display: swap; }
+
+/* ── Tokens: USGS quadrangle inks ─────────────────────────────── */
+:root {
+  --paper: #fdfdfb;          /* map stock */
+  --wood: #d3e8c1;           /* woodland tint */
+  --contour: #9c5a26;        /* contour brown */
+  --contour-ink: #7a4216;    /* brown labels: scientific names, legend symbols */
+  --water: #1f6fb0;          /* hydrography blue: focus only */
+  --ink: #1b1b1a;            /* culture black */
+  --ink-soft: #4a4a45;
+  --purple: #7b3294;         /* photorevision overprint = marked */
+  --purple-ink: #5c2170;
+  --hatch: repeating-linear-gradient(-45deg, rgba(123, 50, 148, .22) 0 2px, transparent 2px 6px);
+
+  --face-label: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", sans-serif;
+  --face-text: "Barlow", "Roboto", system-ui, sans-serif;
+
+  --gutter: 12px;
+  --cell-gap: 2px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: #e9ece4;
+  color: var(--ink);
+  font: 400 16px/1.5 var(--face-text);
+  font-variant-numeric: tabular-nums;
+}
+::selection { background: var(--purple); color: var(--paper); }
+:focus-visible { outline: 3px solid var(--water); outline-offset: 2px; }
+button { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+/* ── The screen ───────────────────────────────────────────────── */
+.screen {
+  position: relative;
+  max-width: 480px; height: 100svh; min-height: 560px;
+  margin: 0 auto;
+  background: var(--paper);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+/* Top collar: quad title block */
+.collar-top {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 8px 10px;
+  padding: calc(18px + env(safe-area-inset-top)) var(--gutter) 10px;
+}
+.quad-name {
+  font: 700 34px/0.9 var(--face-label);
+  letter-spacing: .01em; text-transform: uppercase;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.quad-meta {
+  font: 600 12px/1.25 var(--face-label);
+  letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-soft);
+  text-align: right;
+}
+
+/* The sheet: neatline, graticule, Squares */
+.sheet-wrap { flex: 1 1 auto; display: flex; flex-direction: column; padding: 0 var(--gutter); min-height: 0; }
+.coords {
+  display: flex; justify-content: space-between;
+  font: 500 10.5px/1 var(--face-label); letter-spacing: .04em; color: var(--ink-soft);
+  padding: 0 0 9px;
+}
+.coords.bottom { padding: 9px 0 0; }
+.coords .imprint { display: inline-flex; gap: 4px; align-items: center; font-weight: 600; color: var(--ink); }
+.sheet {
+  position: relative;
+  flex: 1 1 auto;
+  border: 1.5px solid var(--ink);
+  background: var(--wood);
+  min-height: 0;
+}
+.sheet .contours { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.ticks { position: absolute; inset: -7px; pointer-events: none; }
+.grid {
+  position: relative;
+  height: 100%;
+  display: grid;
+  gap: var(--cell-gap);
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--n), minmax(0, 1fr));
+}
+.grid[data-size="3"] { --n: 3; --name-size: 18px; --sci-size: 13px; --sci-display: block; --stamp: 24px; --name-lines: 2; --glyph: 34%; }
+.grid[data-size="4"] { --n: 4; --name-size: 15px; --sci-size: 11.5px; --sci-display: block; --stamp: 20px; --name-lines: 2; --glyph: 38%; }
+.grid[data-size="5"] { --n: 5; --name-size: 13px; --sci-size: 0px; --sci-display: none; --stamp: 17px; --name-lines: 3; --glyph: 44%; }
+
+/* Paper section lines between Squares */
+.grid::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    repeating-linear-gradient(to right, transparent 0 calc((100% + var(--cell-gap)) / var(--n) - var(--cell-gap)), var(--paper) 0 calc((100% + var(--cell-gap)) / var(--n))),
+    repeating-linear-gradient(to bottom, transparent 0 calc((100% + var(--cell-gap)) / var(--n) - var(--cell-gap)), var(--paper) 0 calc((100% + var(--cell-gap)) / var(--n)));
+}
+
+.sq {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+  padding: 0; border: 0; margin: 0;
+  background: transparent;
+  text-align: left; cursor: pointer;
+  outline-offset: -3px;
+  -webkit-tap-highlight-color: transparent;
+}
+.sq .ph {
+  position: relative; flex: 1 1 auto; min-height: 0;
+  overflow: hidden;
+  display: grid; place-items: center;
+}
+/* Unmarked: a legend symbol on the map, no photo */
+.sq .glyph {
+  width: var(--glyph); height: var(--glyph);
+  color: var(--contour-ink); opacity: .78;
+  transition: opacity .2s, color .3s;
+}
+.sq:active .glyph { opacity: 1; }
+/* Marked, until Sightings bring photos (ticket 03): the symbol is overprinted in purple */
+.sq[data-mark] .glyph { color: var(--purple-ink); opacity: 1; }
+.sq[data-mark="confirmed"] .ph { background: var(--hatch); }
+
+.sq .nm {
+  flex: 0 0 auto;
+  padding: 4px 5px 5px;
+  font: 600 var(--name-size)/1.08 var(--face-label);
+  letter-spacing: .005em;
+  color: var(--ink);
+  display: -webkit-box; -webkit-line-clamp: var(--name-lines); -webkit-box-orient: vertical; overflow: hidden;
+  min-height: calc(var(--name-size) * 1.08 * var(--name-lines) + 9px);
+  background: rgba(253, 253, 251, 0.5);
+  transition: background .3s var(--ease-out), color .3s;
+}
+.sq .sci {
+  display: var(--sci-display, none);
+  font: italic 400 var(--sci-size)/1.15 var(--face-text);
+  color: var(--contour-ink);
+  padding: 0 5px 6px; margin-top: -3px;
+  background: rgba(253, 253, 251, 0.5);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: background .3s, color .3s;
+}
+
+/* Verified: solid purple overprint strip, crisp printed check */
+.sq[data-mark="verified"] .nm, .sq[data-mark="verified"] .sci { background: var(--purple); color: var(--paper); }
+.sq[data-mark="verified"] .sci { color: #ecdcf2; }
+
+/* Confirmed: purple photorevision hatch strip, hand-drawn tick */
+.sq[data-mark="confirmed"] .nm, .sq[data-mark="confirmed"] .sci {
+  background: var(--hatch), var(--paper);
+  color: var(--purple-ink);
+}
+
+.sq .stamp-v, .sq .stamp-c { position: absolute; pointer-events: none; opacity: 0; z-index: 2; }
+.sq .stamp-v {
+  right: 4px; top: 4px; width: var(--stamp); height: var(--stamp);
+  background: var(--purple); border: 1.5px solid var(--paper);
+  display: grid; place-items: center;
+}
+.sq .stamp-c { right: 2px; top: 1px; width: calc(var(--stamp) * 1.35); height: calc(var(--stamp) * 1.35); }
+.sq[data-mark="verified"] .stamp-v, .sq[data-mark="confirmed"] .stamp-c { opacity: 1; }
+.sq.just[data-mark="verified"] .stamp-v, .sq.just[data-mark="confirmed"] .stamp-c { animation: press .5s var(--ease-out) .1s both; }
+.sq.just[data-mark="confirmed"] .stamp-c path { stroke-dasharray: 60; animation: pencil .45s var(--ease-out) .1s both; }
+@keyframes press { from { transform: scale(1.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes pencil { from { stroke-dashoffset: 60; } to { stroke-dashoffset: 0; } }
+
+/* Wildcard: triangulation station on open paper */
+.sq.wild:not([data-mark]) .ph { background: rgba(253, 253, 251, .72); }
+.sq.wild .glyph { color: var(--ink); opacity: 1; width: calc(var(--glyph) * 1.1); }
+.sq.wild[data-mark] .glyph { color: var(--purple-ink); }
+.sq.wild:not([data-mark]) .nm { background: rgba(253, 253, 251, .72); }
+.sq.wild .nm { display: block; }
+.sq.wild .sub {
+  display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font: 500 calc(var(--name-size) * .86)/1.15 var(--face-label); color: var(--ink-soft); letter-spacing: .02em;
+}
+.sq.wild[data-mark] .sub { color: inherit; opacity: .9; }
+
+/* Bingo routes: trail symbol (black dash, white casing) */
+.routes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 3; }
+.routes .casing { stroke: var(--paper); stroke-width: 7; stroke-linecap: round; fill: none; opacity: .9; }
+.routes .trail  { stroke: var(--ink); stroke-width: 3; stroke-dasharray: 9 6; stroke-linecap: butt; fill: none; }
+.routes g.new .casing, .routes g.new .trail { animation: walk 0.9s var(--ease-out) .3s both; }
+@keyframes walk { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+
+/* Bottom collar: scale-bar progress + Bingo count */
+.collar-bottom {
+  display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 12px;
+  padding: 8px var(--gutter) calc(12px + env(safe-area-inset-bottom));
+}
+.scale { min-width: 0; }
+.scale-bar { display: flex; height: 8px; border: 1.5px solid var(--ink); }
+.scale-bar i { flex: 1; background: var(--paper); border-right: 1px solid var(--ink); transition: background .4s var(--ease-out); }
+.scale-bar i:last-child { border-right: 0; }
+.scale-bar i:nth-child(even) { background: #e6e6e1; }
+.scale-bar i.on { background: var(--purple); }
+.scale-label {
+  margin-top: 4px;
+  font: 600 12px/1 var(--face-label); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft);
+}
+.scale-label b { color: var(--ink); font-weight: 700; }
+.bingos {
+  text-align: right;
+  font: 700 12px/1 var(--face-label); letter-spacing: .08em; text-transform: uppercase;
+}
+.bingos output {
+  display: inline-block; min-width: 1ch;
+  font: 700 30px/0.85 var(--face-label); letter-spacing: 0;
+  color: var(--purple-ink); margin-right: 4px; vertical-align: -3px;
+}
+.bingos output.bump { animation: bump .6s var(--ease-out); }
+@keyframes bump { 0% { transform: translateY(6px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+
+/* ── Square detail: a legend panel that slides up over the Card ── */
+.detail { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; justify-content: flex-end; }
+.detail .scrim { position: absolute; inset: 0; border: 0; padding: 0; background: rgba(27, 27, 26, .38); cursor: pointer; animation: fade .25s ease-out; }
+.panel {
+  position: relative;
+  max-height: 86%;
+  overflow-y: auto; overscroll-behavior: contain;
+  background: var(--paper);
+  border-top: 1.5px solid var(--ink);
+  box-shadow: 0 -10px 30px -12px rgba(27, 27, 26, .35);
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+  animation: rise .38s var(--ease-out);
+}
+@keyframes rise { from { transform: translateY(40%); opacity: 0; } }
+@keyframes fade { from { opacity: 0; } }
+.panel-head { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: start; }
+.panel-head .glyph { width: 40px; height: 40px; color: var(--contour-ink); margin-top: 2px; }
+.panel-head.wild .glyph { color: var(--ink); }
+.panel h2 { margin: 0; font: 700 28px/1 var(--face-label); letter-spacing: .005em; }
+.panel .meta { margin: 4px 0 0; font: 400 15px/1.35 var(--face-text); color: var(--ink-soft); }
+.panel .meta i { color: var(--contour-ink); }
+.close {
+  width: 44px; height: 44px; margin: -10px -10px 0 0;
+  display: grid; place-items: center; background: none; border: 0; cursor: pointer;
+}
+.hint { margin: 12px 0 0; font: 400 15px/1.45 var(--face-text); color: var(--ink-soft); max-width: 40ch; }
+.status {
+  margin-top: 14px;
+  padding: 10px 12px;
+  font: 600 17px/1.2 var(--face-label); letter-spacing: .02em;
+}
+.status.verified { background: var(--purple); color: var(--paper); }
+.status.confirmed { background: var(--hatch), var(--paper); color: var(--purple-ink); border: 1.5px solid var(--purple); }
+.status small { display: block; font: 400 14px/1.3 var(--face-text); letter-spacing: 0; opacity: .9; }
+
+/* Temporary developer control (removed in ticket 03): deliberately off-world */
+.dev {
+  margin-top: 16px; padding: 10px 12px 12px;
+  border: 1.5px dashed #b36b00; background: #fff8ec;
+}
+.dev p { margin: 0 0 8px; font: 700 12px/1.2 var(--face-label); letter-spacing: .1em; text-transform: uppercase; color: #8a5200; }
+.dev .row { display: flex; flex-wrap: wrap; gap: 8px; }
+.dev button {
+  min-height: 44px; padding: 0 12px; cursor: pointer;
+  background: var(--paper); border: 1.5px solid var(--ink);
+  font: 600 15px/1 var(--face-label); letter-spacing: .03em;
+}
+
+/* ── Celebrations: printed revision stamps ────────────────────── */
+.stamp {
+  position: absolute; left: 50%; top: 50%; z-index: 4;
+  transform: translate(-50%, -50%) rotate(-5deg);
+  padding: 10px 18px 12px;
+  background: rgba(253, 253, 251, .94);
+  border: 3px solid var(--purple);
+  box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4.5px var(--purple), 0 6px 20px -6px rgba(40, 10, 50, .45);
+  color: var(--purple);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+}
+.stamp .big { display: block; font: 700 54px/0.9 var(--face-label); letter-spacing: .04em; }
+.stamp .small { display: block; font: 600 12px/1.2 var(--face-label); letter-spacing: .1em; text-transform: uppercase; color: var(--purple-ink); margin-top: 4px; }
+.stamp.show { animation: stamp-in 2.6s var(--ease-out) .5s both; }
+@keyframes stamp-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) rotate(-5deg) scale(1.5); }
+  14%  { opacity: 1; transform: translate(-50%, -50%) rotate(-5deg) scale(1); }
+  80%  { opacity: 1; transform: translate(-50%, -50%) rotate(-5deg) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) rotate(-5deg) scale(1); }
+}
+.sheet.shake { animation: shake .32s ease-out .5s; }
+@keyframes shake { 25% { transform: translateX(-2px); } 50% { transform: translateX(2px); } 75% { transform: translateX(-1px); } }
+
+.blackout {
+  position: absolute; inset: 0; z-index: 7;
+  display: grid; place-items: center;
+  background: rgba(92, 33, 112, .82);
+  border: 0; padding: 24px; cursor: pointer; width: 100%;
+  animation: fade .5s var(--ease-out);
+}
+.blackout .plate {
+  background: var(--paper); color: var(--purple-ink);
+  border: 3px solid var(--purple);
+  box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4.5px var(--purple);
+  padding: 22px 22px 18px; max-width: 300px; text-align: center;
+  transform: rotate(-3deg);
+  animation: plate .7s var(--ease-out) .1s both;
+}
+@keyframes plate { from { transform: rotate(-3deg) scale(1.4); opacity: 0; } }
+.blackout .big { display: block; font: 700 52px/0.9 var(--face-label); letter-spacing: .03em; color: var(--purple); }
+.blackout .rev { display: block; margin: 8px 0 14px; font: 600 12px/1.2 var(--face-label); letter-spacing: .12em; text-transform: uppercase; }
+.blackout .text { display: block; margin: 0 0 14px; font: 500 16px/1.4 var(--face-text); color: var(--ink); }
+.blackout .tap { font: 600 13px/1 var(--face-label); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+  .stamp.show { animation: stamp-still 2.6s steps(1) both !important; }
+  @keyframes stamp-still { 0% { opacity: 1; } 100% { opacity: 0; } }
+}
