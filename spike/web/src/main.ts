@@ -14,6 +14,16 @@ const status = $<HTMLParagraphElement>("status");
 const statsList = $<HTMLDListElement>("stats");
 const camera = $<HTMLInputElement>("camera");
 const cameraLabel = $<HTMLLabelElement>("camera-label");
+const liveOpen = $<HTMLButtonElement>("live-open");
+const live = $<HTMLDivElement>("live");
+const liveVideo = $<HTMLVideoElement>("live-video");
+const liveCapture = $<HTMLButtonElement>("live-capture");
+const liveClose = $<HTMLButtonElement>("live-close");
+
+// Chrome sets this when it reloads a tab it discarded in the background to save memory.
+const wasDiscarded = (document as Document & { wasDiscarded?: boolean }).wasDiscarded === true;
+$<HTMLParagraphElement>("discarded").hidden = !wasDiscarded;
+let liveStream: MediaStream | undefined;
 const fixturesButton = $<HTMLButtonElement>("fixtures");
 const results = $<HTMLOListElement>("results");
 const report = $<HTMLPreElement>("report");
@@ -36,6 +46,7 @@ function setStatus(message: string, isError = false) {
 
 function setReady(ready: boolean) {
   camera.disabled = !ready;
+  liveOpen.disabled = !ready;
   fixturesButton.disabled = !ready;
   cameraLabel.classList.toggle("disabled", !ready);
 }
@@ -72,6 +83,7 @@ function updateReport() {
     `Device: ${navigator.userAgent}`,
     `Cores: ${navigator.hardwareConcurrency}, memory: ${nav.deviceMemory ?? "?"} GB`,
     `Precision: ${precision.value}, backend choice: ${backend.value}, graph optimization: ${optimization.value}`,
+    `Page was discarded and reloaded by Chrome: ${wasDiscarded}`,
   ];
   if (loadStats) {
     lines.push("", "Load:");
@@ -161,7 +173,7 @@ camera.addEventListener("change", async () => {
   const file = camera.files?.[0];
   if (!file) return;
   setStatus("Checking photo…");
-  showResult("Your photo", await check(file));
+  showResult("Camera app photo", await check(file));
   setStatus("Ready.");
   camera.value = "";
 });
@@ -177,6 +189,46 @@ fixturesButton.addEventListener("click", async () => {
   setStatus("Ready.");
   fixturesButton.disabled = false;
 });
+
+function closeLiveCamera() {
+  liveStream?.getTracks().forEach((track) => track.stop());
+  liveStream = undefined;
+  liveVideo.srcObject = null;
+  live.hidden = true;
+}
+
+liveOpen.addEventListener("click", async () => {
+  try {
+    liveStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 1280 } },
+      audio: false,
+    });
+  } catch (error) {
+    setStatus(`Camera unavailable: ${error instanceof Error ? error.message : String(error)}`, true);
+    return;
+  }
+  liveVideo.srcObject = liveStream;
+  live.hidden = false;
+  live.scrollIntoView({ behavior: "smooth", block: "center" });
+});
+
+liveCapture.addEventListener("click", async () => {
+  if (!liveVideo.videoWidth) return;
+  liveCapture.disabled = true;
+  const frame = document.createElement("canvas");
+  frame.width = liveVideo.videoWidth;
+  frame.height = liveVideo.videoHeight;
+  frame.getContext("2d")?.drawImage(liveVideo, 0, 0);
+  const image = await new Promise<Blob | null>((resolve) => frame.toBlob(resolve, "image/jpeg", 0.92));
+  if (image) {
+    setStatus("Checking photo…");
+    showResult(`Live camera photo (${frame.width}×${frame.height})`, await check(image));
+    setStatus("Ready.");
+  }
+  liveCapture.disabled = false;
+});
+
+liveClose.addEventListener("click", closeLiveCamera);
 
 clearButton.addEventListener("click", async () => {
   const removed = await caches.delete(MODEL_CACHE);

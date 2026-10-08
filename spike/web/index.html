@@ -10,6 +10,10 @@
     <main>
       <h1>BioCLIP spike</h1>
       <p class="lede">Ticket 01: does BioCLIP run in this browser, and how fast?</p>
+      <p id="discarded" class="notice" hidden>
+        Chrome discarded and reloaded this page while it was in the background (for example while the
+        camera app was open). The model has to be loaded again.
+      </p>
 
       <section>
         <h2>1. Load the model</h2>
@@ -46,11 +50,19 @@
       <section>
         <h2>2. Check photos</h2>
         <div class="row">
-          <label class="button" id="camera-label">
-            Take a photo
+          <button id="live-open" type="button" disabled>Live camera</button>
+          <label class="button secondary disabled" id="camera-label">
+            Camera app
             <input id="camera" type="file" accept="image/*" capture="environment" disabled hidden />
           </label>
-          <button id="fixtures" type="button" disabled>Run the 4 test photos</button>
+          <button id="fixtures" type="button" class="secondary" disabled>Run the 4 test photos</button>
+        </div>
+        <div id="live" class="live" hidden>
+          <video id="live-video" autoplay playsinline muted></video>
+          <div class="row">
+            <button id="live-capture" type="button">Check this</button>
+            <button id="live-close" type="button" class="secondary">Close camera</button>
+          </div>
         </div>
         <ol id="results" class="results"></ol>
       </section>

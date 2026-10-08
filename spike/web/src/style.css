@@ -81,7 +81,7 @@ button, .button {
   cursor: pointer;
 }
 
-button.secondary {
+button.secondary, .button.secondary {
   background: transparent;
   color: var(--accent);
   border: 1px solid var(--accent);
@@ -114,3 +114,20 @@ button:disabled, .button.disabled { opacity: 0.45; cursor: not-allowed; }
 
 footer { color: var(--muted); font-size: 0.8rem; margin: 1rem 0 2rem; }
 footer a { color: inherit; }
+
+.live video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover; /* shows the same centered square the model sees */
+  border-radius: 0.5rem;
+  background: #000;
+  margin-bottom: 0.75rem;
+}
+
+.notice {
+  border: 1px solid var(--bad);
+  color: var(--bad);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
