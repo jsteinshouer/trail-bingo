@@ -5,3 +5,6 @@ web/dist/
 export/.venv/
 export/__pycache__/
 export.log
+export/.eval-cache/
+eval.log
+eval-animals.log

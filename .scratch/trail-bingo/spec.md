@@ -47,7 +47,7 @@ On the trail, fully offline, when I spot something I take a photo — a Sighting
 ### Playing on the trail
 
 25. As a player, I want to see my Card as a grid with marked and unmarked Squares, so that I can see my progress at a glance.
-26. As a player, I want to tap one button to take a photo of something I've spotted, so that recording a Sighting is quick.
+26. As a player, I want to take a photo of something I've spotted with one tap, without leaving the game, so that recording a Sighting is quick and never loses my progress.
 27. As a player, I want the photo check to run on my phone with no signal, so that the game works anywhere on the trail.
 28. As a player, I want a confident match to mark the matching Square as Verified automatically, so that I can get back to hiking quickly.
 29. As a player, I want the app to show its top two or three guesses from my Card when it isn't sure, so that I can pick the right one myself.
@@ -84,10 +84,10 @@ On the trail, fully offline, when I spot something I take a photo — a Sighting
 
 ## Implementation Decisions
 
-- **Architecture (see ADR 0001):** fully static PWA with no backend of our own. BioCLIP (`imageomics/bioclip`, ViT-B/16, MIT licence) runs in the browser through Transformers.js / ONNX Runtime Web, using WebGPU where available and falling back to WebAssembly. No LLM is used, so the project does not enter the "Best Use of Gemma" category.
+- **Architecture (see ADR 0001):** fully static PWA with no backend of our own. BioCLIP (`imageomics/bioclip`, ViT-B/16, MIT licence) runs in the browser through ONNX Runtime Web (its WebGPU build), using WebGPU where available and falling back to WebAssembly. Labels are tokenized in the browser with Hugging Face's tokenizers.js, which matches open_clip's tokens exactly. No LLM is used, so the project does not enter the "Best Use of Gemma" category.
 - **Stack:** Vite + TypeScript, no UI framework. Model inference runs in a Web Worker so the UI stays responsive.
 - **Target device:** Android Chrome. iOS is not a target for this build.
-- **Model packaging:** both BioCLIP encoders (image and text) are exported to ONNX at fp16 by us; no browser-ready package with both encoders exists. Plain dynamic int8 quantization is avoided because it measurably degrades this ViT. Expected total about 300 MB.
+- **Model packaging:** both BioCLIP encoders (image and text) are exported to ONNX by us; no browser-ready package with both encoders exists. Weights are stored as fp16 and cast to fp32 when the model loads, with all math in fp32: about 173 MB (image) + 128 MB (text), identical output to PyTorch. Full fp16 math is avoided because it crashes ONNX Runtime's CPU backend, which is the WebAssembly fallback; plain dynamic int8 is avoided because it measurably degrades this ViT. The spike's export script (ticket 01) is the starting point.
 - **Model download:** an explicit first-launch setup step with progress, not part of the service worker install. The model is cached in browser storage and persistent storage is requested.
 - **Offline:** a service worker caches the app shell so the installed app opens with no signal. Building a Card requires signal; playing does not.
 - **Modules:**
@@ -97,7 +97,8 @@ On the trail, fully offline, when I spot something I take a photo — a Sighting
   - **Encoder adapter** — turns text labels and images into L2-normalized vectors using BioCLIP, running in the Web Worker.
   - **Store adapter** — saves and loads the active Card, its marks and Sighting photos in IndexedDB.
   - **Place search** — turns a place name into coordinates (a geocoding lookup) or uses device geolocation.
-  - **UI** — setup/download screen, Card builder, Card grid, camera/Sighting flow, top-guesses picker, fact card, celebrations.
+  - **UI** — setup/download screen, Card builder, Card grid, in-page camera/Sighting flow, top-guesses picker, fact card, celebrations.
+- **Camera:** Sightings are taken with an in-page live camera (a square preview showing exactly the area the model sees, and a capture button), not Android's camera app. Opening the camera app puts Chrome in the background, and in the spike Chrome discarded and reloaded the page, losing the loaded model.
 - **Card generation rules:**
   - Start with a 10 km radius around the location; widen to 25 km if there aren't enough species to fill the Card.
   - Season window: observations from the current month ±1 month, across all years.
@@ -105,13 +106,14 @@ On the trail, fully offline, when I spot something I take a photo — a Sighting
   - Plants, trees and fungi Squares are single species. Animal Squares are broad groups: mammal, bird, reptile, amphibian, butterfly/moth, other insect, spider. A broad group is only offered if at least one species in that group has been observed nearby.
   - Wildcard placement: center on 3×3 and 5×5; a random one of the four middle Squares on 4×4.
 - **Photo check:**
-  - At Card build time, text vectors are computed for: each Square's label, about 20 local decoy species (observed nearby but not on the Card), and the full local species list (a few hundred taxa) for the Wildcard and for naming the likely species behind a broad animal Square.
-  - A Sighting's image vector is compared with those text vectors. Possible outcomes: a confident match to a Square (Verified); an unsure result showing the top two or three Card Squares for the player to pick (Confirmed); a confident match to a decoy or nothing (no match); a confident match to a local species not on the Card (fills the Wildcard if it's still open).
-  - Confidence thresholds are tuned during the spike and on the test hike.
+  - At Card build time, text vectors are computed for the full local species list: plants and fungi, and animals (a few hundred taxa each). Labels use the form "a photo of <scientific name>, <common name>." (BioCLIP's full-taxonomy format measured no better).
+  - A Sighting's image vector is compared with every local species. Plant, tree and fungus Squares match on species. **Animal Squares match by roll-up:** the best-matching local animal species decides the broad group, and also gives the likely species to show the player. In the Elkhorn, NE accuracy test, roll-up got the group right 93% of the time, against 56–60% for matching the group names directly.
+  - Local species that aren't on the Card act as the decoys: a confident match to one of them fills the Wildcard if it's still open, otherwise it's "not on your Card".
+  - **Confidence is the gap between the top two matches, not the raw score.** Raw cosine scores of right and wrong answers overlap (medians about 0.33 vs 0.29); the gap separates them. Starting rule: gap ≥ 0.03 marks the Square as Verified; smaller gaps show the top three guesses for the player to pick (Confirmed) or dismiss. In the accuracy test this auto-marked 63% of photos with 4.8% of those wrong, and the right answer was in the top three 92–94% of the time. Tuned on the test hike (ticket 11).
 - **State:** one active Card at a time. Verified and Confirmed both count toward Bingo and Blackout. Getting a Bingo does not end the game.
 - **Fungus safety:** every fact card for a fungus shows a "never eat based on this identification" warning.
 - **Attribution:** fact cards and reference photos credit their source (iNaturalist or Wikipedia) as their licences require.
-- **Plan B:** if the Day 1 spike shows in-browser BioCLIP is too slow or crashes the tab on Android Chrome, the fallback (hosted model vs smaller model) is decided at that point and ADR 0001 is updated.
+- **Plan B: not needed.** The spike ran BioCLIP on WebGPU in Chrome on the target Android phone: about 6 s to load from cache, about 1.3 s per photo check, and the tab stayed stable with the in-page camera. See ticket 01.
 
 ## Testing Decisions
 

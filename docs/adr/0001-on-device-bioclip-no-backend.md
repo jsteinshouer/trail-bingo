@@ -11,5 +11,6 @@ Trail Bingo checks Sightings with BioCLIP (`imageomics/bioclip`, ViT-B/16, MIT) 
 
 ## Consequences
 
-- Both BioCLIP encoders must be exported to ONNX ourselves (fp16; plain dynamic int8 measurably degrades this ViT).
-- Revisit if the spike fails; plan B is decided then.
+- Plain dynamic int8 quantization is avoided because it measurably degrades this ViT.
+- Both BioCLIP encoders are exported ourselves. Weights are stored as fp16 and computed in fp32; full fp16 math crashes ONNX Runtime's WebAssembly backend.
+- The spike (ticket 01) confirmed it on the target Android phone: WebGPU, about 6 s cached load and about 1.3 s per photo check. Plan B is not needed.

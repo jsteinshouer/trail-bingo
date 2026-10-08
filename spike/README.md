@@ -42,4 +42,14 @@ Headless Chromium on the dev machine (2 cores, 4 GB, WebAssembly backend, fp16, 
 
 Downloading the two fp16 encoders from a local server took about 25 s. One earlier "all" run took 47 s to create sessions, most likely due to memory pressure right after a build; it didn't happen again.
 
-The phone results are still to come (see the ticket).
+On the target phone (Android 10, Chrome 154, PowerVR GPU): **WebGPU**, cached load about 6 s, cold load 93 s (mostly download), about 1.3 s per photo check, 4/4 test photos. Use the **Live camera**: with Android's camera app, Chrome sometimes discarded and reloaded the page.
+
+## 3. Accuracy test
+
+```sh
+cd export
+uv run python eval_accuracy.py        # plants/fungi vs the local list; defaults to Elkhorn, NE
+uv run python eval_animal_groups.py   # three ways to decide an animal's broad group
+```
+
+Elkhorn, NE results: plants/fungi top-1 80–81%, top-3 92–94% against 500 local species; animal groups 93% by matching the local species and taking its group. Full numbers and thresholds are in ticket 01's comments; raw output in `eval-results.json`.
