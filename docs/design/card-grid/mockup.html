@@ -1,0 +1,857 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Card Grid Mockup</title>
+<meta name="description" content="Trail Bingo: the on-trail Card screen in the Topo Quadrangle direction. Interactive mockup for implementation.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+  /* ── Tokens: USGS quadrangle inks ─────────────────────────────── */
+  :root {
+    --paper: #fdfdfb;          /* map stock */
+    --wood: #d3e8c1;           /* woodland tint */
+    --wood-deep: #bcdba4;
+    --contour: #9c5a26;        /* contour brown */
+    --contour-ink: #7a4216;    /* brown labels: scientific names, legend symbols */
+    --water: #1f6fb0;          /* hydrography blue: focus only */
+    --ink: #1b1b1a;            /* culture black */
+    --ink-soft: #4a4a45;
+    --rule: rgba(27, 27, 26, 0.55);
+    --purple: #7b3294;         /* photorevision overprint = marked */
+    --purple-ink: #5c2170;
+    --hatch: repeating-linear-gradient(-45deg, rgba(123,50,148,.2) 0 2px, transparent 2px 6px);
+
+    --face-label: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", sans-serif;
+    --face-text: "Barlow", "Roboto", system-ui, sans-serif;
+
+    --gutter: 12px;
+    --cell-gap: 2px;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: #e9ece4;
+    color: var(--ink);
+    font: 400 16px/1.5 var(--face-text);
+    font-variant-numeric: tabular-nums;
+  }
+  ::selection { background: var(--purple); color: var(--paper); }
+  :focus-visible { outline: 3px solid var(--water); outline-offset: 2px; }
+  button { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+
+  /* ── Mockup page layout ───────────────────────────────────────── */
+  .page {
+    display: grid;
+    grid-template-columns: 390px minmax(0, 560px);
+    gap: 56px;
+    justify-content: center;
+    align-items: start;
+    padding: 40px 24px 72px;
+  }
+  @media (max-width: 1000px) {
+    .page { grid-template-columns: minmax(0, 1fr); gap: 32px; padding: 0 0 48px; }
+    .notes { padding: 0 16px; }
+  }
+
+  /* ── The phone screen ─────────────────────────────────────────── */
+  .screen {
+    position: sticky; top: 40px;
+    width: 100%; max-width: 390px; height: 800px;
+    margin: 0 auto;
+    background: var(--paper);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 18px 48px -12px rgba(30, 40, 20, .35);
+  }
+  @media (max-width: 1000px) {
+    .screen { position: relative; top: 0; height: 100svh; min-height: 640px; max-width: none; box-shadow: none; }
+  }
+
+  /* Top collar: quad title block */
+  .collar-top {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: end;
+    gap: 8px 10px;
+    padding: 18px var(--gutter) 10px;
+  }
+  .menu-btn {
+    width: 44px; height: 44px; margin: 0 -10px -6px 0; align-self: center;
+    display: grid; place-items: center;
+    background: none; border: 0; cursor: pointer;
+  }
+  .quad-name {
+    font: 700 34px/0.9 var(--face-label);
+    letter-spacing: .01em; text-transform: uppercase;
+    margin: 0;
+  }
+  .quad-meta {
+    font: 600 12px/1.25 var(--face-label);
+    letter-spacing: .06em; text-transform: uppercase;
+    color: var(--ink-soft);
+    text-align: right;
+  }
+  .quad-meta .ready { color: var(--purple-ink); display: inline-flex; gap: 4px; align-items: center; }
+
+  /* The sheet: neatline, graticule, Squares */
+  .sheet-wrap { flex: 1 1 auto; display: flex; flex-direction: column; padding: 0 var(--gutter); min-height: 0; }
+  .coords {
+    display: flex; justify-content: space-between;
+    font: 500 10.5px/1 var(--face-label); letter-spacing: .04em; color: var(--ink-soft);
+    padding: 0 0 9px;
+  }
+  .coords.bottom { padding: 9px 0 0; }
+  .coords .imprint { display: inline-flex; gap: 4px; align-items: center; font-weight: 600; color: var(--ink); }
+  .sheet {
+    position: relative;
+    flex: 1 1 auto;
+    border: 1.5px solid var(--ink);
+    background: var(--wood);
+    min-height: 0;
+  }
+  .sheet .contours { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .ticks { position: absolute; inset: -7px; pointer-events: none; }
+  .grid {
+    position: relative;
+    height: 100%;
+    display: grid;
+    gap: var(--cell-gap);
+  }
+
+  /* Paper section lines between Squares */
+  .grid::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      repeating-linear-gradient(to right, transparent 0 calc((100% + var(--cell-gap)) / var(--n) - var(--cell-gap)), var(--paper) 0 calc((100% + var(--cell-gap)) / var(--n))),
+      repeating-linear-gradient(to bottom, transparent 0 calc((100% + var(--cell-gap)) / var(--n) - var(--cell-gap)), var(--paper) 0 calc((100% + var(--cell-gap)) / var(--n)));
+  }
+
+  .sq {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column;
+    min-width: 0; min-height: 0;
+    padding: 0; border: 0; margin: 0;
+    background: transparent;
+    text-align: left; cursor: pointer;
+    outline-offset: -3px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .sq .ph {
+    position: relative; flex: 1 1 auto; min-height: 0;
+    overflow: hidden;
+    display: grid; place-items: center;
+  }
+  /* Unmarked: a legend symbol on the map, no photo */
+  .sq .glyph {
+    width: var(--glyph); height: var(--glyph);
+    color: var(--contour-ink); opacity: .78;
+    transition: opacity .2s;
+  }
+  .sq:active .glyph { opacity: 1; }
+  .sq .shot {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: none;
+  }
+  .sq[data-mark] .shot { display: block; }
+  .sq[data-mark] .glyph { display: none; }
+  .sq.just .shot { animation: develop .7s var(--ease-out) both; }
+  @keyframes develop {
+    from { clip-path: inset(50% 50% 50% 50%); filter: saturate(0) brightness(1.4); }
+    60%  { filter: saturate(.6) brightness(1.1); }
+    to   { clip-path: inset(0 0 0 0); filter: none; }
+  }
+
+  .sq .nm {
+    flex: 0 0 auto;
+    padding: 4px 5px 5px;
+    font: 600 var(--name-size)/1.08 var(--face-label);
+    letter-spacing: .005em;
+    color: var(--ink);
+    display: -webkit-box; -webkit-line-clamp: var(--name-lines); -webkit-box-orient: vertical; overflow: hidden;
+    min-height: calc(var(--name-size) * 1.08 * var(--name-lines) + 9px);
+    background: rgba(253, 253, 251, 0.5);
+    transition: background .3s var(--ease-out), color .3s;
+  }
+  .sq .sci {
+    display: var(--sci-display, none);
+    font: italic 400 var(--sci-size)/1.15 var(--face-text);
+    color: var(--contour-ink);
+    padding: 0 5px 6px; margin-top: -3px;
+    background: rgba(253, 253, 251, 0.5);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: background .3s, color .3s;
+  }
+
+  /* Verified: solid purple overprint strip, crisp printed check */
+  .sq[data-mark="v"] .nm, .sq[data-mark="v"] .sci { background: var(--purple); color: var(--paper); }
+  .sq[data-mark="v"] .sci { color: #ecdcf2; }
+
+  /* Confirmed: purple photorevision hatch strip, hand-drawn tick */
+  .sq[data-mark="c"] .nm, .sq[data-mark="c"] .sci {
+    background: repeating-linear-gradient(-45deg, rgba(123,50,148,.22) 0 2px, transparent 2px 6px), var(--paper);
+    color: var(--purple-ink);
+  }
+
+  .sq .stamp-v, .sq .stamp-c { position: absolute; pointer-events: none; opacity: 0; z-index: 2; }
+  .sq .stamp-v {
+    right: 4px; top: 4px; width: var(--stamp); height: var(--stamp);
+    background: var(--purple); border: 1.5px solid var(--paper);
+    display: grid; place-items: center;
+  }
+  .sq .stamp-c { right: 2px; top: 1px; width: calc(var(--stamp) * 1.35); height: calc(var(--stamp) * 1.35); }
+  .sq[data-mark="v"] .stamp-v, .sq[data-mark="c"] .stamp-c { opacity: 1; }
+  .sq.just .stamp-v, .sq.just .stamp-c { animation: press .5s var(--ease-out) .35s both; }
+  .sq.just .stamp-c path { stroke-dasharray: 60; animation: pencil .45s var(--ease-out) .35s both; }
+  @keyframes press { from { transform: scale(1.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes pencil { from { stroke-dashoffset: 60; } to { stroke-dashoffset: 0; } }
+
+  /* Wildcard: triangulation station on open paper */
+  .sq.wild:not([data-mark]) .ph { background: rgba(253, 253, 251, .72); }
+  .sq.wild .glyph { color: var(--ink); opacity: 1; width: calc(var(--glyph) * 1.1); }
+  .sq.wild:not([data-mark]) .nm { background: rgba(253, 253, 251, .72); }
+  .sq.wild .nm { display: block; }
+  .sq.wild .sub {
+    display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font: 500 calc(var(--name-size) * .86)/1.15 var(--face-label); color: var(--ink-soft); letter-spacing: .02em;
+  }
+  .sq.wild[data-mark] .sub { color: inherit; opacity: .9; }
+
+  /* Bingo routes: trail symbol (black dash, white casing) */
+  .routes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 3; }
+  .routes .casing { stroke: var(--paper); stroke-width: 7; stroke-linecap: round; fill: none; opacity: .9; }
+  .routes .trail  { stroke: var(--ink); stroke-width: 3; stroke-dasharray: 9 6; stroke-linecap: butt; fill: none; }
+  .routes g.new .casing, .routes g.new .trail { animation: walk 0.9s var(--ease-out) .3s both; }
+  @keyframes walk { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+
+  /* Bottom collar: scale-bar progress + Bingo count */
+  .collar-bottom {
+    display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 12px;
+    padding: 8px var(--gutter) 10px;
+  }
+  .scale { min-width: 0; }
+  .scale-bar { display: flex; height: 8px; border: 1.5px solid var(--ink); }
+  .scale-bar i { flex: 1; background: var(--paper); border-right: 1px solid var(--ink); transition: background .4s var(--ease-out); }
+  .scale-bar i:last-child { border-right: 0; }
+  .scale-bar i:nth-child(even) { background: #e6e6e1; }
+  .scale-bar i.on { background: var(--purple); }
+  .scale-label {
+    margin-top: 4px;
+    font: 600 12px/1 var(--face-label); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft);
+  }
+  .scale-label b { color: var(--ink); font-weight: 700; }
+  .bingos {
+    text-align: right;
+    font: 700 12px/1 var(--face-label); letter-spacing: .08em; text-transform: uppercase;
+  }
+  .bingos output {
+    display: inline-block; min-width: 1ch;
+    font: 700 30px/0.85 var(--face-label); letter-spacing: 0;
+    color: var(--purple-ink); margin-right: 4px; vertical-align: -3px;
+  }
+  .bingos output.bump { animation: bump .6s var(--ease-out); }
+  @keyframes bump { 0% { transform: translateY(6px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+
+  /* Sighting button: a printed purple band */
+  .sighting {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    width: 100%; height: 68px; flex: 0 0 auto;
+    margin: 0; border: 0; border-radius: 0;
+    background: var(--purple); color: var(--paper);
+    font: 700 21px/1 var(--face-label); letter-spacing: .03em;
+    cursor: pointer;
+    padding-bottom: env(safe-area-inset-bottom);
+    transition: background .15s;
+  }
+  .sighting:hover { background: #6c2a83; }
+  .sighting:active { background: var(--purple-ink); }
+  .sighting:focus-visible { outline-offset: -5px; outline-color: var(--paper); }
+
+  /* ── Square detail: a legend panel that slides up over the Card ── */
+  .detail { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; justify-content: flex-end; }
+  .detail .scrim { position: absolute; inset: 0; border: 0; padding: 0; background: rgba(27, 27, 26, .38); cursor: pointer; animation: fade .25s ease-out; }
+  .panel {
+    position: relative;
+    max-height: 86%;
+    overflow-y: auto; overscroll-behavior: contain;
+    background: var(--paper);
+    border-top: 1.5px solid var(--ink);
+    box-shadow: 0 -10px 30px -12px rgba(27, 27, 26, .35);
+    padding: 18px 16px 18px;
+    animation: rise .38s var(--ease-out);
+    scrollbar-width: thin; scrollbar-color: var(--contour) transparent;
+  }
+  @keyframes rise { from { transform: translateY(40%); opacity: 0; } }
+  @keyframes fade { from { opacity: 0; } }
+  .panel-head { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: start; }
+  .panel-head .glyph { width: 40px; height: 40px; color: var(--contour-ink); margin-top: 2px; }
+  .panel-head.wild .glyph { color: var(--ink); }
+  .panel h2 { margin: 0; font: 700 28px/1 var(--face-label); letter-spacing: .005em; }
+  .panel .meta { margin: 4px 0 0; font: 400 15px/1.35 var(--face-text); color: var(--ink-soft); }
+  .panel .meta i { color: var(--contour-ink); }
+  .close {
+    width: 44px; height: 44px; margin: -10px -10px 0 0;
+    display: grid; place-items: center; background: none; border: 0; cursor: pointer;
+  }
+  .clue {
+    position: relative; margin-top: 16px;
+    border: 1.5px solid var(--ink);
+    background: var(--wood);
+    aspect-ratio: 4 / 3;
+    display: grid; place-items: center;
+    overflow: hidden;
+  }
+  .clue .contours { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .clue-btn {
+    position: relative;
+    display: inline-flex; align-items: center; gap: 10px;
+    min-height: 52px; padding: 0 22px;
+    background: var(--paper); border: 1.5px solid var(--ink); cursor: pointer;
+    font: 700 19px/1 var(--face-label); letter-spacing: .03em;
+  }
+  .clue-btn:hover { background: #f1f6ec; }
+  .clue img, .photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .clue img { animation: develop .7s var(--ease-out) both; }
+  .credit { margin: 6px 0 0; font: 400 12.5px/1.35 var(--face-text); color: var(--ink-soft); }
+  .hint { margin: 10px 0 0; font: 400 15px/1.45 var(--face-text); color: var(--ink-soft); max-width: 40ch; }
+  .photo { position: relative; margin-top: 16px; aspect-ratio: 1 / 1; border: 1.5px solid var(--ink); overflow: hidden; }
+  .status {
+    display: flex; align-items: center; gap: 10px; margin-top: 12px;
+    padding: 10px 12px;
+    font: 600 17px/1.2 var(--face-label); letter-spacing: .02em;
+  }
+  .status.v { background: var(--purple); color: var(--paper); }
+  .status.c { background: var(--hatch), var(--paper); color: var(--purple-ink); border: 1.5px solid var(--purple); }
+  .status small { display: block; font: 400 14px/1.3 var(--face-text); letter-spacing: 0; opacity: .9; }
+  .placeholder {
+    margin-top: 12px; padding: 12px;
+    border: 1.5px dashed var(--rule);
+    font: 400 14px/1.4 var(--face-text); color: var(--ink-soft);
+  }
+  .dev {
+    margin-top: 16px; padding: 10px 12px 12px;
+    border: 1.5px dashed #b36b00; background: #fff8ec;
+  }
+  .dev p { margin: 0 0 8px; font: 700 12px/1 var(--face-label); letter-spacing: .1em; text-transform: uppercase; color: #8a5200; }
+  .dev .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .dev button {
+    min-height: 40px; padding: 0 12px; cursor: pointer;
+    background: var(--paper); border: 1.5px solid var(--ink);
+    font: 600 15px/1 var(--face-label); letter-spacing: .03em;
+  }
+
+  /* Celebrations: printed revision stamps */
+  .stamp {
+    position: absolute; left: 50%; top: 50%; z-index: 4;
+    transform: translate(-50%, -50%) rotate(-5deg);
+    padding: 10px 18px 12px;
+    background: rgba(253,253,251,.94);
+    border: 3px solid var(--purple);
+    box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4.5px var(--purple), 0 6px 20px -6px rgba(40, 10, 50, .45);
+    color: var(--purple);
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+  }
+  .stamp .big { display: block; font: 700 54px/0.9 var(--face-label); letter-spacing: .04em; }
+  .stamp .small { display: block; font: 600 12px/1.2 var(--face-label); letter-spacing: .1em; text-transform: uppercase; color: var(--purple-ink); margin-top: 4px; }
+  .stamp.show { animation: stamp-in 2.6s var(--ease-out) .5s both; }
+  @keyframes stamp-in {
+    0%   { opacity: 0; transform: translate(-50%, -50%) rotate(-5deg) scale(1.5); }
+    14%  { opacity: 1; transform: translate(-50%, -50%) rotate(-5deg) scale(1); }
+    80%  { opacity: 1; transform: translate(-50%, -50%) rotate(-5deg) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) rotate(-5deg) scale(1); }
+  }
+  .sheet.shake { animation: shake .32s ease-out .5s; }
+  @keyframes shake { 25% { transform: translateX(-2px); } 50% { transform: translateX(2px); } 75% { transform: translateX(-1px); } }
+
+  .blackout {
+    position: absolute; inset: 0; z-index: 7;
+    display: none; place-items: center;
+    background: rgba(92, 33, 112, .82);
+    border: 0; padding: 24px; cursor: pointer; width: 100%;
+  }
+  .blackout.show { display: grid; animation: fade .5s var(--ease-out); }
+  .blackout .plate {
+    background: var(--paper); color: var(--purple-ink);
+    border: 3px solid var(--purple);
+    box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4.5px var(--purple);
+    padding: 22px 22px 18px; max-width: 300px; text-align: center;
+    transform: rotate(-3deg);
+    animation: plate .7s var(--ease-out) .1s both;
+  }
+  @keyframes plate { from { transform: rotate(-3deg) scale(1.4); opacity: 0; } }
+  .blackout .big { display: block; font: 700 52px/0.9 var(--face-label); letter-spacing: .03em; color: var(--purple); }
+  .blackout .rev { display: block; margin: 8px 0 14px; font: 600 12px/1.2 var(--face-label); letter-spacing: .12em; text-transform: uppercase; }
+  .blackout p { margin: 0 0 14px; font: 500 16px/1.4 var(--face-text); color: var(--ink); }
+  .blackout .tap { font: 600 13px/1 var(--face-label); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+    .stamp.show { animation: stamp-still 2.6s steps(1) both !important; }
+    @keyframes stamp-still { 0% { opacity: 1; } 100% { opacity: 0; } }
+  }
+
+  /* ── Notes column ─────────────────────────────────────────────── */
+  .notes { max-width: 560px; }
+  .notes h1 { font: 700 44px/0.95 var(--face-label); letter-spacing: .005em; text-transform: uppercase; margin: 0 0 10px; }
+  .notes .lede { font-size: 18px; line-height: 1.45; color: var(--ink-soft); margin: 0 0 28px; max-width: 34em; }
+  .notes h2 { font: 700 20px/1.1 var(--face-label); letter-spacing: .04em; text-transform: uppercase; margin: 36px 0 10px; }
+  .notes p, .notes li { max-width: 62ch; }
+  .notes ul { padding-left: 1.1em; margin: 0; }
+  .notes li { margin: 0 0 8px; }
+  .notes li::marker { color: var(--purple); }
+  .notes code { font: 500 14px/1 ui-monospace, "Cascadia Mono", monospace; background: rgba(27,27,26,.06); padding: 1px 4px; }
+  .controls {
+    display: grid; gap: 14px;
+    padding: 18px 18px 20px;
+    background: var(--paper);
+    border: 1.5px solid var(--ink);
+  }
+  .controls .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .controls .lbl { font: 700 13px/1 var(--face-label); letter-spacing: .08em; text-transform: uppercase; width: 100%; color: var(--ink-soft); }
+  .controls button {
+    min-height: 40px; padding: 0 14px;
+    background: var(--paper); border: 1.5px solid var(--ink); cursor: pointer;
+    font: 600 15px/1 var(--face-label); letter-spacing: .03em;
+  }
+  .controls button:hover { background: var(--wood); }
+  .controls button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .controls .hint { margin: 0; font-size: 14px; color: var(--ink-soft); }
+  .legend { display: grid; grid-template-columns: 52px 1fr; gap: 12px 14px; align-items: center; margin: 0; }
+  .legend dt { height: 40px; border: 1px solid var(--rule); position: relative; overflow: hidden; display: grid; place-items: center; }
+  .legend dd { margin: 0; font-size: 15px; line-height: 1.4; }
+  .legend dd b { font-family: var(--face-label); font-weight: 700; letter-spacing: .03em; font-size: 16px; }
+  .lg-un { background: var(--wood); color: var(--contour-ink); }
+  .lg-v { background: linear-gradient(to bottom, #6f8f4e 0 62%, var(--purple) 62%); }
+  .lg-c { background: linear-gradient(to bottom, #6f8f4e 0 62%, transparent 62%), repeating-linear-gradient(-45deg, rgba(123,50,148,.4) 0 2px, var(--paper) 2px 6px); }
+  .lg-w { background: var(--paper); }
+  .lg-r { background: var(--wood); }
+  .glyph-row { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 0; padding: 0; list-style: none; }
+  .glyph-row li { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 15px; }
+  .glyph-row svg { width: 24px; height: 24px; color: var(--contour-ink); }
+  details { margin-top: 12px; font-size: 13px; color: var(--ink-soft); }
+  details summary { cursor: pointer; font: 600 14px/1.4 var(--face-label); letter-spacing: .04em; text-transform: uppercase; color: var(--ink); }
+  details ol { padding-left: 1.4em; }
+  .synthetic { font-size: 13px; color: var(--ink-soft); border-top: 1px solid var(--rule); padding-top: 10px; margin-top: 28px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ═══ The Card screen ═══ -->
+  <main class="screen" id="screen" aria-label="Trail Bingo Card">
+    <header class="collar-top">
+      <h1 class="quad-name" id="quadName">Elkhorn</h1>
+      <div class="quad-meta">
+        Nebraska · October<br>
+        <span class="ready"><svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 5 9.5 10.5 2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>Ready offline</span>
+      </div>
+      <button class="menu-btn" type="button" aria-label="Card menu: new Card, photo credits">
+        <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="16" height="16"/><path d="M3 9h16M3 15h16M9 3v16M15 3v16" stroke-width="1"/></svg>
+      </button>
+    </header>
+
+    <div class="sheet-wrap">
+      <div class="coords" aria-hidden="true"><span>41°18′</span><span id="sizeTag">5 × 5 Card</span><span>96°12′</span></div>
+      <div class="sheet" id="sheet">
+        <svg class="contours" id="contours" aria-hidden="true"></svg>
+        <div class="grid" id="grid" role="grid" aria-label="Squares"></div>
+        <svg class="routes" id="routes" aria-hidden="true"></svg>
+        <div class="stamp" id="stamp" role="status" aria-live="polite"><span class="big">BINGO</span><span class="small" id="stampSub"></span></div>
+        <svg class="ticks" id="ticks" aria-hidden="true"></svg>
+      </div>
+      <div class="coords bottom" aria-hidden="true"><span>41°15′</span><span class="imprint"><svg width="11" height="10" viewBox="0 0 16 14" aria-hidden="true"><path d="M8 1 15 13H1Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg> Trail Bingo · iNaturalist · 10 km</span><span>96°16′</span></div>
+    </div>
+
+    <footer class="collar-bottom">
+      <div class="scale">
+        <div class="scale-bar" id="scaleBar" aria-hidden="true"></div>
+        <div class="scale-label" id="scaleLabel"></div>
+      </div>
+      <div class="bingos"><output id="bingoCount" aria-live="polite">0</output><span id="bingoWord">Bingos</span></div>
+    </footer>
+
+    <button class="sighting" type="button" id="sighting">
+      <svg width="28" height="24" viewBox="0 0 28 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M2 7h6l2.5-4h7L20 7h6v15H2Z"/><circle cx="14" cy="14" r="4.6"/></svg>
+      Take a Sighting
+    </button>
+
+    <div class="detail" id="detail" hidden>
+      <button class="scrim" type="button" tabindex="-1" aria-label="Close" id="scrim"></button>
+      <section class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="detailName"></section>
+    </div>
+
+    <button class="blackout" id="blackout" type="button" aria-label="Blackout. Tap to keep exploring">
+      <span class="plate">
+        <span class="big">BLACKOUT</span>
+        <span class="rev">Photorevised · October 2026</span>
+        <p id="blackoutText">Every Square on the Elkhorn Card is marked.</p>
+        <span class="tap">Tap to keep exploring</span>
+      </span>
+    </button>
+  </main>
+
+  <!-- ═══ Notes for the implementer ═══ -->
+  <section class="notes" aria-label="Mockup notes">
+    <h1>The Card, as a map sheet</h1>
+    <p class="lede">The on-trail home screen in the Topo Quadrangle direction. A new Card is a bare map: names and legend symbols, no photos. Spotting the thing is the game. Each Sighting prints the player's own photo onto the sheet, so a finished Card is a record of the hike.</p>
+
+    <div class="controls">
+      <div class="row">
+        <span class="lbl">Card size</span>
+        <button type="button" data-size="3">3 × 3</button>
+        <button type="button" data-size="4">4 × 4</button>
+        <button type="button" data-size="5">5 × 5</button>
+      </div>
+      <div class="row">
+        <span class="lbl">Try it</span>
+        <button type="button" id="finishLine">Complete a line</button>
+        <button type="button" id="fillAll">Blackout</button>
+        <button type="button" id="reset">Reset</button>
+      </div>
+      <p class="hint">Tap any Square to open its detail. Unmarked Squares offer a clue; marked ones show the Sighting photo. The orange "Mockup only" box in the detail stands in for ticket 02's dev control. Take a Sighting marks the next open Square.</p>
+    </div>
+
+    <h2>Legend</h2>
+    <dl class="legend">
+      <dt class="lg-un"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9.5" r="5.5"/><path d="M12 15v6"/></svg></dt><dd><b>Unmarked.</b> The woodland tint with contours, a legend symbol for the kind of thing, and the name. No photo. On 3 × 3 and 4 × 4 the scientific name sits below in brown italic.</dd>
+      <dt class="lg-v"></dt><dd><b>Verified.</b> The player's Sighting photo develops onto the Square, with a solid purple name strip and a crisp printed check. The photo check was sure.</dd>
+      <dt class="lg-c"></dt><dd><b>Confirmed.</b> The Sighting photo with a hatched purple strip and a hand-pencilled tick. The player chose from the top guesses. Same ink as Verified because it counts the same; only the mark differs.</dd>
+      <dt class="lg-w"><svg width="22" height="20" viewBox="0 0 16 14"><path d="M8 1 15 13H1Z" fill="none" stroke="#1b1b1a" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8" cy="9" r="1.6" fill="#1b1b1a"/></svg></dt><dd><b>Wildcard.</b> A triangulation-station mark on open paper. Once filled, it shows the Sighting photo and names what filled it.</dd>
+      <dt class="lg-r"><svg width="44" height="10" viewBox="0 0 44 10"><path d="M2 5h40" stroke="#fdfdfb" stroke-width="7" stroke-linecap="round"/><path d="M2 5h40" stroke="#1b1b1a" stroke-width="3" stroke-dasharray="9 6"/></svg></dt><dd><b>Bingo.</b> The map's trail symbol is drawn through the line and stays on the Card.</dd>
+    </dl>
+    <ul class="glyph-row" aria-label="Legend symbols">
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9.5" r="5.5"/><path d="M12 15v6"/></svg>Tree or shrub</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20.5h14M12 20.5V8M12 20.5 7 12.5M12 20.5l5-8M12 20.5 9.2 10M12 20.5 14.8 10"/></svg>Plant or wildflower</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13.5a8 6.5 0 0 1 16 0Z"/><path d="M10 13.5v6.5h4v-6.5"/></svg>Fungus or lichen</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="16" rx="4.2" ry="3.4"/><circle cx="6.2" cy="10.6" r="1.7"/><circle cx="9.8" cy="6.8" r="1.7"/><circle cx="14.2" cy="6.8" r="1.7"/><circle cx="17.8" cy="10.6" r="1.7"/></svg>Animal</li>
+    </ul>
+
+    <h2>Clues</h2>
+    <ul>
+      <li>Tapping an unmarked Square opens its detail: name, scientific name, kind, and a <b>Show a clue</b> button. The clue reveals the reference photo, with its credit line right beneath it.</li>
+      <li>Animal Squares show a representative local species as the clue ("for example, a white-tailed deer").</li>
+      <li>Clue photos are still downloaded when the Card is built, so clues work offline.</li>
+    </ul>
+
+    <h2>Screen anatomy</h2>
+    <ul>
+      <li><b>Top collar</b>: the place in large condensed caps, as on a quad's title block, with state, month and the Ready offline line beside it. The grid icon opens the Card menu (new Card, photo credits). The app name sits in the bottom margin, where a quad prints its publisher.</li>
+      <li><b>The sheet</b>: a neatline frame with corner coordinates, tick marks at every Square boundary, and one continuous contour field running under every unmarked Square. As Sightings land, photos cover more of the map.</li>
+      <li><b>Bottom collar</b>: the scale bar is the progress meter, one segment per Square, filled purple as Squares are marked. The Bingo count sits at the right.</li>
+      <li><b>Take a Sighting</b>: a full-width purple band at the thumb. It's the only filled control on the screen.</li>
+    </ul>
+
+    <h2>Fitting 5 × 5</h2>
+    <ul>
+      <li>The whole Card is always on one screen, at every size. No scrolling or panning.</li>
+      <li>Without reference photos, names get more room: three lines of 13 px condensed semibold at 5 × 5, two lines at 4 × 4 and 3 × 3 with the scientific name below. Names are bottom-aligned in every state, so rows read evenly.</li>
+    </ul>
+
+    <h2>Celebrations</h2>
+    <ul>
+      <li><b>Bingo</b>: the Sighting photo develops, then the trail line draws across the completed line, the sheet gives a small shake with a <code>navigator.vibrate([40, 60, 40])</code> pulse, and a purple revision stamp says BINGO for about 2.6 s, then clears on its own. No sound.</li>
+      <li><b>Blackout</b>: a larger stamp over the Card, which is now all photos. It stays until tapped.</li>
+      <li>Reduced motion: no developing, drawing or scaling. The stamp shows and hides without animating.</li>
+    </ul>
+
+    <h2>Tokens</h2>
+    <ul>
+      <li>Inks: paper <code>#fdfdfb</code>, woodland <code>#d3e8c1</code>, contour <code>#9c5a26</code> / <code>#7a4216</code>, ink <code>#1b1b1a</code>, photorevision purple <code>#7b3294</code> / <code>#5c2170</code>. Hydrography blue <code>#1f6fb0</code> is used only for focus rings.</li>
+      <li>Type: Barlow Condensed for map lettering, Barlow for running text and scientific names.</li>
+      <li>No radius, no card chrome, light only.</li>
+    </ul>
+
+    <p class="synthetic">Demonstration Card: the species are plausible for Elkhorn, NE in October, but the Card was assembled by hand. The "Sighting photos" are iNaturalist photos standing in for the player's own. Photo credits are below.</p>
+    <details>
+      <summary>Photo credits</summary>
+      <ol id="credits"></ol>
+    </details>
+  </section>
+</div>
+
+<script>
+const SPECIES = [{"kind":"tree","name":"Eastern cottonwood","sci":"Populus deltoides","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/4350/small.jpg","credit":"(c) JanetandPhil, some rights reserved (CC BY-NC-ND)"},{"kind":"tree","name":"Bur oak","sci":"Quercus macrocarpa","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/22786993/small.jpeg","credit":"(c) rayrob, some rights reserved (CC BY-NC)"},{"kind":"tree","name":"Smooth sumac","sci":"Rhus glabra","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/389287395/small.jpg","credit":"(c) Thomas Shahan, some rights reserved (CC BY-NC)"},{"kind":"plant","name":"Common milkweed","sci":"Asclepias syriaca","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/99923276/small.jpg","credit":"(c) csozanne, some rights reserved (CC BY-NC)"},{"kind":"plant","name":"Big bluestem","sci":"Andropogon gerardi","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/49663357/small.jpg","credit":"(c) Kingsbrae Garden, some rights reserved (CC BY-NC-SA)"},{"kind":"plant","name":"Canada goldenrod","sci":"Solidago canadensis","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/309294858/small.jpg","credit":"(c) jonastid, some rights reserved (CC BY-NC)"},{"kind":"fungus","name":"Turkey tail","sci":"Trametes versicolor","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/27005174/small.jpg","credit":"no rights reserved, uploaded by Ken Kneidel (CC0)"},{"kind":"tree","name":"Eastern redcedar","sci":"Juniperus virginiana","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/165898544/small.jpg","credit":"(c) Steven Severinghaus, some rights reserved (CC BY-NC-SA)"},{"kind":"tree","name":"Common hackberry","sci":"Celtis occidentalis","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/256037606/small.jpg","credit":"(c) Gilles Ayotte, some rights reserved (CC BY-SA)"},{"kind":"plant","name":"Eastern poison ivy","sci":"Toxicodendron radicans","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/2237896/small.jpg","credit":"(c) Sam Fraser-Smith, some rights reserved (CC BY)"},{"kind":"plant","name":"New England aster","sci":"Symphyotrichum novae-angliae","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/52293886/small.jpg","credit":"(c) musicmanz, some rights reserved (CC BY-NC)"},{"kind":"plant","name":"Maximilian sunflower","sci":"Helianthus maximiliani","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/1456982/small.JPG","credit":"(c) smwhite, some rights reserved (CC BY-NC)"},{"kind":"plant","name":"Virginia creeper","sci":"Parthenocissus quinquefolia","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/428768/small.jpg","credit":"(c) Suzanne Cadwell, some rights reserved (CC BY-NC)"},{"kind":"tree","name":"White mulberry","sci":"Morus alba","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/56582166/small.jpeg","credit":"no rights reserved, uploaded by 葉子 (CC0)"},{"kind":"plant","name":"Wild bergamot","sci":"Monarda fistulosa","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/301795454/small.jpg","credit":"(c) ziggymom, some rights reserved (CC BY-NC)"},{"kind":"fungus","name":"Splitgill mushroom","sci":"Schizophyllum commune","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/9681138/small.jpeg","credit":"(c) Grey Smith, some rights reserved (CC BY)"},{"kind":"tree","name":"Roughleaf dogwood","sci":"Cornus drummondii","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/19623005/small.jpg","credit":"(c) Arb O'Retum, some rights reserved (CC BY-NC-SA)"},{"kind":"tree","name":"American elm","sci":"Ulmus americana","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/8798295/small.jpeg","credit":"(c) William Van Hemessen, some rights reserved (CC BY-NC)"},{"kind":"animal","name":"A bird","example":"northern cardinal","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/1396655/small.jpg","credit":"(c) Greg Lasley, some rights reserved (CC BY-NC)"},{"kind":"animal","name":"A mammal","example":"white-tailed deer","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/110157765/small.jpg","credit":"(c) jefferykarafa, some rights reserved (CC BY-NC)"},{"kind":"animal","name":"A butterfly or moth","example":"monarch","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/227923335/small.jpeg","credit":"(c) Alejandro Lopez, some rights reserved (CC BY-NC-SA)"},{"kind":"animal","name":"Another insect","example":"differential grasshopper","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/478660/small.jpg","credit":"(c) Victor W Fazio III, some rights reserved (CC BY-NC-ND)"},{"kind":"animal","name":"A reptile","example":"common garter snake","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/3263522/small.JPG","credit":"(c) Mark Kluge, some rights reserved (CC BY-NC)"},{"kind":"animal","name":"An amphibian","example":"American toad","photo":"https://inaturalist-open-data.s3.amazonaws.com/photos/130773208/small.jpg","credit":"(c) Alex Shure, some rights reserved (CC BY-NC)"}];
+const WILD = { name: "Common yarrow", sci: "Achillea millefolium", photo: "../../../spike/web/public/fixtures/achillea-millefolium.jpg", credit: "(c) Eric Lamb, some rights reserved (CC BY)" };
+
+const KINDS = {
+  tree:   { label: "Tree or shrub",       svg: '<circle cx="12" cy="9.5" r="5.5"/><path d="M12 15v6"/>' },
+  plant:  { label: "Plant or wildflower", svg: '<path d="M5 20.5h14M12 20.5V8M12 20.5 7 12.5M12 20.5l5-8M12 20.5 9.2 10M12 20.5 14.8 10"/>' },
+  fungus: { label: "Fungus or lichen",    svg: '<path d="M4 13.5a8 6.5 0 0 1 16 0Z"/><path d="M10 13.5v6.5h4v-6.5"/>' },
+  animal: { label: "Animal",              svg: '<ellipse cx="12" cy="16" rx="4.2" ry="3.4"/><circle cx="6.2" cy="10.6" r="1.7"/><circle cx="9.8" cy="6.8" r="1.7"/><circle cx="14.2" cy="6.8" r="1.7"/><circle cx="17.8" cy="10.6" r="1.7"/>' },
+};
+const glyph = (kind) => `<svg class="glyph" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${KINDS[kind].svg}</svg>`;
+const TRIG = '<svg class="glyph" viewBox="0 0 16 14" aria-hidden="true"><path d="M8 1 15 13H1Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="8" cy="9" r="1.5" fill="currentColor"/></svg>';
+const ICON_CHECK = '<svg width="60%" height="60%" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 5 9.5 10.5 2.5" fill="none" stroke="#fdfdfb" stroke-width="2.4" stroke-linecap="square"/></svg>';
+const ICON_TICK = '<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true"><path d="M3.5 13.2c1.6.9 3.1 2.6 4.4 5.1 2.4-6.3 6.6-11.3 12.6-14.6" fill="none" stroke="#fdfdfb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/><path d="M3.5 13.2c1.6.9 3.1 2.6 4.4 5.1 2.4-6.3 6.6-11.3 12.6-14.6" fill="none" stroke="#5c2170" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_CLOSE = '<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M5 5l12 12M17 5 5 17" stroke="currentColor" stroke-width="2"/></svg>';
+const ICON_EYE = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+
+// Order Squares are dealt in, so a 3×3 still gets a mix of trees, plants, fungi and animals.
+const DEAL = [1, 19, 5, 6, 18, 3, 20, 9, 0, 21, 2, 4, 15, 7, 22, 10, 8, 11, 23, 12, 13, 14, 16, 17];
+const WILD_AT = { 3: 4, 4: 9, 5: 12 };          // 4×4: one of the four middle Squares
+const PRESET = {                                   // starting marks for each size
+  3: { 0: "v", 1: "c", 4: "v" },
+  4: { 4: "v", 5: "c", 6: "v", 7: "v", 9: "v", 1: "v" },
+  5: { 5: "v", 6: "v", 7: "c", 8: "v", 9: "v", 12: "v", 2: "v", 17: "c", 15: "c" },
+};
+const FINISHER = { 3: 7, 4: 13, 5: 22 };          // Square that completes a fresh line from each preset
+
+const $ = (id) => document.getElementById(id);
+const grid = $("grid"), sheet = $("sheet"), routes = $("routes");
+let n = 5, marks = {}, cells = [], doneLines = new Set(), clues = new Set(), openIdx = null, lastFocus = null;
+
+function sizeVars() {
+  const s = { 3: [18, 13, "block", 24, 2, "34%"], 4: [15, 11.5, "block", 20, 2, "38%"], 5: [13, 0, "none", 17, 3, "44%"] }[n];
+  grid.style.gridTemplateColumns = `repeat(${n}, minmax(0, 1fr))`;
+  grid.style.gridTemplateRows = `repeat(${n}, minmax(0, 1fr))`;
+  grid.style.setProperty("--n", n);
+  grid.style.setProperty("--name-size", s[0] + "px");
+  grid.style.setProperty("--sci-size", s[1] + "px");
+  grid.style.setProperty("--sci-display", s[2]);
+  grid.style.setProperty("--stamp", s[3] + "px");
+  grid.style.setProperty("--name-lines", s[4]);
+  grid.style.setProperty("--glyph", s[5]);
+  $("sizeTag").textContent = `${n} × ${n} Card`;
+}
+
+function build() {
+  sizeVars();
+  grid.innerHTML = "";
+  cells = [];
+  let d = 0;
+  for (let i = 0; i < n * n; i++) {
+    const wild = i === WILD_AT[n];
+    const sp = wild ? null : SPECIES[DEAL[d++]];
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "sq" + (wild ? " wild" : "");
+    b.setAttribute("role", "gridcell");
+    const shot = wild ? WILD.photo : sp.photo;
+    const sub = wild ? "" : (sp.sci || `any ${sp.name.replace(/^(A|An|Another) /, "").toLowerCase()}`);
+    b.innerHTML = `<span class="ph">${wild ? TRIG : glyph(sp.kind)}<img class="shot" src="${shot}" alt="" loading="lazy" decoding="async"></span>`
+      + (wild ? `<span class="nm">Wildcard<span class="sub">anything living</span></span>` : `<span class="nm">${sp.name}</span><span class="sci">${sub}</span>`)
+      + `<span class="stamp-v">${ICON_CHECK}</span><span class="stamp-c">${ICON_TICK}</span>`;
+    b.addEventListener("click", () => openDetail(i));
+    grid.appendChild(b);
+    cells.push({ el: b, wild, sp });
+  }
+  document.querySelectorAll("[data-size]").forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.size === n)));
+  paint();
+  doneLines = new Set(lines().filter(isDone).map(String));
+  drawTicks(); drawRoutes(new Set());
+}
+
+function paint() {
+  cells.forEach((c, i) => {
+    const m = marks[i];
+    if (m) c.el.dataset.mark = m; else delete c.el.dataset.mark;
+    const what = c.wild ? (m ? `Wildcard, filled by ${WILD.name}` : "Wildcard, anything living") : c.sp.name;
+    const state = m === "v" ? "Verified" : m === "c" ? "Confirmed" : "not found yet";
+    c.el.setAttribute("aria-label", `${what}, ${state}`);
+    if (c.wild) c.el.querySelector(".nm").innerHTML = `Wildcard<span class="sub">${m ? WILD.name : "anything living"}</span>`;
+    else if (c.sp.kind === "animal") c.el.querySelector(".sci").textContent = m ? `likely ${c.sp.example}` : `any ${c.sp.name.replace(/^(A|An|Another) /, "").toLowerCase()}`;
+  });
+  const marked = Object.keys(marks).length;
+  $("scaleBar").innerHTML = Array.from({ length: n * n }, (_, k) => `<i class="${k < marked ? "on" : ""}"></i>`).join("");
+  $("scaleLabel").innerHTML = `<b>${marked}</b> of ${n * n} Squares marked`;
+}
+
+function lines() {
+  const L = [];
+  for (let r = 0; r < n; r++) L.push(Array.from({ length: n }, (_, c) => r * n + c));
+  for (let c = 0; c < n; c++) L.push(Array.from({ length: n }, (_, r) => r * n + c));
+  L.push(Array.from({ length: n }, (_, k) => k * n + k));
+  L.push(Array.from({ length: n }, (_, k) => k * n + (n - 1 - k)));
+  return L;
+}
+const isDone = (line) => line.every((i) => marks[i]);
+
+function setMark(i, m) {
+  if (m) marks[i] = m; else delete marks[i];
+  const el = cells[i].el;
+  el.classList.remove("just"); void el.offsetWidth; if (m) el.classList.add("just");
+}
+
+function afterChange() {
+  paint();
+  const now = new Set(lines().filter(isDone).map(String));
+  const fresh = new Set([...now].filter((k) => !doneLines.has(k)));
+  doneLines = now;
+  drawRoutes(fresh);
+  const count = now.size, out = $("bingoCount");
+  $("bingoWord").textContent = count === 1 ? "Bingo" : "Bingos";
+  if (out.textContent !== String(count)) { out.textContent = count; out.classList.remove("bump"); void out.offsetWidth; out.classList.add("bump"); }
+  if (fresh.size) {
+    if (Object.keys(marks).length === n * n) return celebrateBlackout(count);
+    celebrateBingo(count);
+  }
+}
+
+function celebrateBingo(count) {
+  const s = $("stamp");
+  $("stampSub").textContent = count === 1 ? "First line on the Elkhorn Card" : `${count} lines on the Elkhorn Card`;
+  s.classList.remove("show"); void s.offsetWidth; s.classList.add("show");
+  sheet.classList.remove("shake"); void sheet.offsetWidth; sheet.classList.add("shake");
+  if (navigator.vibrate) setTimeout(() => navigator.vibrate([40, 60, 40]), 500);
+}
+function celebrateBlackout(count) {
+  $("blackoutText").textContent = `Every Square on the Elkhorn Card is marked. ${count} Bingos along the way.`;
+  setTimeout(() => $("blackout").classList.add("show"), 700);
+  if (navigator.vibrate) navigator.vibrate([60, 80, 60, 80, 160]);
+}
+$("blackout").addEventListener("click", () => $("blackout").classList.remove("show"));
+
+/* ── Square detail ───────────────────────────────────────────── */
+function openDetail(i) {
+  openIdx = i; lastFocus = cells[i].el;
+  renderDetail();
+  $("detail").hidden = false;
+  $("panel").querySelector(".close").focus();
+}
+function closeDetail() {
+  $("detail").hidden = true; openIdx = null;
+  if (lastFocus) lastFocus.focus();
+}
+function renderDetail() {
+  const i = openIdx, c = cells[i], m = marks[i], p = $("panel");
+  const name = c.wild ? "Wildcard" : c.sp.name;
+  const meta = c.wild
+    ? (m ? `Filled by <b>${WILD.name}</b> · <i>${WILD.sci}</i>` : "Any living thing the photo check recognizes, on this Card or not.")
+    : c.sp.kind === "animal"
+      ? (m ? `Likely a ${c.sp.example}` : "Any species in this group counts.")
+      : `<i>${c.sp.sci}</i> · ${KINDS[c.sp.kind].label}`;
+  let body = "";
+  if (m) {
+    const shot = c.wild ? WILD.photo : c.sp.photo;
+    body = `<div class="photo"><img src="${shot}" alt="Your Sighting of ${c.wild ? WILD.name : name}"></div>
+      <div class="status ${m}">${m === "v" ? "Verified" : "Confirmed"}<small>${m === "v" ? "The photo check was sure." : "You picked it from the top guesses."}</small></div>
+      <div class="placeholder">The fact card goes here (ticket 08): a short summary, the reference photo and its credit${(!c.wild && c.sp.kind === "fungus") ? ", and the never-eat warning" : ""}.</div>`;
+  } else if (!c.wild) {
+    const shown = clues.has(i);
+    const forEx = c.sp.kind === "animal" ? `For example, a ${c.sp.example}. ` : "";
+    body = shown
+      ? `<div class="clue"><img src="${c.sp.photo}" alt="Reference photo: ${c.sp.kind === "animal" ? c.sp.example : name}"></div>
+         <p class="credit">${forEx}Photo ${c.sp.credit.replace(/^\(c\)/, "©")}, via iNaturalist.</p>`
+      : `<div class="clue"><svg class="contours" data-contours aria-hidden="true"></svg>
+           <button class="clue-btn" type="button" id="clueBtn">${ICON_EYE}Show a clue</button></div>
+         <p class="hint">Stuck? A clue shows a photo of what to look for.</p>`;
+  } else {
+    body = `<p class="hint">Fill it by photographing anything living that isn't already marked on your Card.</p>`;
+  }
+  const dev = `<div class="dev"><p>Mockup only</p><div class="row">
+      <button type="button" data-dev="v">Mark Verified</button><button type="button" data-dev="c">Mark Confirmed</button><button type="button" data-dev="">Unmark</button>
+    </div></div>`;
+  p.innerHTML = `<div class="panel-head${c.wild ? " wild" : ""}">${c.wild ? TRIG : glyph(c.sp.kind)}
+      <div><h2 id="detailName">${name}</h2><p class="meta">${meta}</p></div>
+      <button class="close" type="button" aria-label="Close">${ICON_CLOSE}</button></div>${body}${dev}`;
+  p.querySelector(".close").addEventListener("click", closeDetail);
+  const cb = p.querySelector("#clueBtn");
+  if (cb) cb.addEventListener("click", () => { clues.add(i); renderDetail(); p.querySelector(".close").focus(); });
+  p.querySelectorAll("[data-dev]").forEach((b) => b.addEventListener("click", () => {
+    closeDetail(); setMark(i, b.dataset.dev || undefined); afterChange();
+  }));
+  const svg = p.querySelector("[data-contours]");
+  if (svg) requestAnimationFrame(() => contourField(svg, svg.clientWidth, svg.clientHeight, [{ x: .7, y: .3, rings: 14, ph: 1.2 }]));
+}
+$("scrim").addEventListener("click", closeDetail);
+addEventListener("keydown", (e) => { if (e.key === "Escape" && openIdx !== null) closeDetail(); });
+
+/* ── Map linework ────────────────────────────────────────────── */
+function drawRoutes(fresh) {
+  const box = sheet.getBoundingClientRect();
+  routes.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
+  const center = (i) => { const r = cells[i].el.getBoundingClientRect(); return [r.left - box.left + r.width / 2, r.top - box.top + r.height * 0.42]; };
+  routes.innerHTML = [...doneLines].map((key) => {
+    const ids = key.split(",").map(Number);
+    const a = center(ids[0]), b = center(ids[ids.length - 1]);
+    const dx = b[0] - a[0], dy = b[1] - a[1], ext = 14 / Math.hypot(dx, dy);
+    const d = `M${(a[0] - dx * ext).toFixed(1)} ${(a[1] - dy * ext).toFixed(1)}L${(b[0] + dx * ext).toFixed(1)} ${(b[1] + dy * ext).toFixed(1)}`;
+    return `<g class="${fresh.has(key) ? "new" : ""}"><path class="casing" d="${d}"/><path class="trail" d="${d}"/></g>`;
+  }).join("");
+}
+
+// Contour field: concentric wobbly rings per hill, every fifth one an index contour.
+function contourField(svg, w, h, hills) {
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  const m = Math.max(w, h);
+  let out = "";
+  hills.forEach((hl) => {
+    const cx = hl.x * w, cy = hl.y * h, step = m * (hl.step || 0.034);
+    for (let k = 1; k <= hl.rings; k++) {
+      const r0 = k * step, pts = [];
+      for (let t = 0; t <= 96; t++) {
+        const a = (t / 96) * Math.PI * 2;
+        const r = r0 * (1 + 0.13 * Math.sin(3 * a + hl.ph + k * 0.09) + 0.06 * Math.sin(5 * a + hl.ph * 2 - k * 0.05) + 0.03 * Math.sin(9 * a + k * 0.3));
+        pts.push((t ? "L" : "M") + (cx + Math.cos(a) * r * 1.15).toFixed(1) + " " + (cy + Math.sin(a) * r * 0.88).toFixed(1));
+      }
+      const index = k % 5 === 0;
+      out += `<path d="${pts.join("")}Z" fill="none" stroke="#9c5a26" stroke-opacity="${index ? 0.55 : 0.36}" stroke-width="${index ? 1.3 : 0.7}"/>`;
+    }
+  });
+  svg.innerHTML = out;
+}
+const drawContours = () => contourField($("contours"), sheet.clientWidth, sheet.clientHeight,
+  [{ x: .78, y: .18, rings: 22, ph: .6 }, { x: .12, y: .86, rings: 13, ph: 2.1, step: 0.03 }]);
+
+function drawTicks() {
+  const svg = $("ticks"), w = sheet.clientWidth + 14, h = sheet.clientHeight + 14;
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  let d = "";
+  for (let k = 1; k < n; k++) {
+    const x = 7 + (sheet.clientWidth * k) / n, y = 7 + (sheet.clientHeight * k) / n;
+    d += `M${x} 0V6M${x} ${h - 6}V${h}M0 ${y}H6M${w - 6} ${y}H${w}`;
+  }
+  svg.innerHTML = `<path d="${d}" stroke="#1b1b1a" stroke-width="1.2"/>`;
+}
+// Redraw map linework whenever the sheet changes size (font load, rotation, Card size).
+new ResizeObserver(() => { drawContours(); drawTicks(); drawRoutes(new Set()); }).observe(sheet);
+
+/* ── Controls ────────────────────────────────────────────────── */
+function setSize(s) {
+  n = s; marks = { ...PRESET[s] }; clues = new Set();
+  build();
+  $("bingoCount").textContent = doneLines.size;
+  $("bingoWord").textContent = doneLines.size === 1 ? "Bingo" : "Bingos";
+}
+document.querySelectorAll("[data-size]").forEach((b) => b.addEventListener("click", () => setSize(+b.dataset.size)));
+$("reset").addEventListener("click", () => setSize(n));
+$("finishLine").addEventListener("click", () => {
+  const open = (l) => l.filter((i) => !marks[i]).length;
+  const target = lines().filter((l) => !isDone(l)).sort((a, b) => open(a) - open(b))[0];
+  if (!target) return;
+  target.filter((i) => !marks[i]).forEach((i) => setMark(i, "v"));
+  afterChange();
+});
+$("fillAll").addEventListener("click", () => {
+  cells.forEach((_, i) => { if (!marks[i]) setMark(i, i % 3 ? "v" : "c"); });
+  afterChange();
+});
+$("sighting").addEventListener("click", () => {
+  const open = cells.map((_, i) => i).filter((i) => !marks[i]);
+  if (!open.length) return;
+  setMark(open.includes(FINISHER[n]) ? FINISHER[n] : open[0], "v");
+  afterChange();
+});
+
+$("credits").innerHTML = SPECIES.map((s) => `<li>${s.name}${s.example ? ` (${s.example})` : ""}: ${s.credit}, via iNaturalist</li>`).join("")
+  + `<li>Wildcard (${WILD.name}): ${WILD.credit}, via iNaturalist</li>`;
+
+const hash = location.hash.slice(1).split("/");
+setSize([3, 4, 5].includes(+hash[0]) ? +hash[0] : 5);
+if (hash[1] === "detail" || hash[1] === "clue") {
+  const i = cells.findIndex((c, k) => !c.wild && !marks[k]);
+  if (hash[1] === "clue") clues.add(i);
+  openDetail(i);
+}
+</script>
+</body>
+</html>
