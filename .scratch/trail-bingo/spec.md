@@ -39,7 +39,7 @@ On the trail, fully offline, when I spot something I take a photo — a Sighting
 18. As a player on a 4×4 Card, I want the Wildcard placed in one of the four middle Squares, so that it is still useful for completing lines.
 19. As a player, I want the search area to widen automatically if there aren't enough nearby species to fill my Card, so that I still get a full Card in less-observed places.
 20. As a player, I want a clear message if even the wider area can't fill a Card of my chosen size and groups, so that I can pick a smaller size or more groups.
-21. As a player, I want each Square to show a name and a reference photo, so that I know what I'm looking for.
+21. As a player, I want each Square to show just its name until I find it, with a reference photo I can reveal as a clue if I'm stuck, so that spotting it on my own is part of the game.
 22. As a player, I want everything the Card needs — names, reference photos, facts and match data — downloaded while I still have signal, so that the Card works fully offline.
 23. As a player, I want a clear "Ready offline" confirmation when a Card has finished building, so that I know it's safe to head out.
 24. As a player, I want building a new Card to replace my current one only after I confirm, so that I don't lose a Card in progress by accident.

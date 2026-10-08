@@ -74,10 +74,6 @@ In the mockup, the orange "Mockup only" box in the detail (Mark Verified / Mark 
 - Touch targets: Squares are at least 70 px; the Sighting band is full width.
 - The 4×4 Wildcard goes in a random one of the four middle Squares (the mockup fixes it at index 9).
 
-## Conflicts with existing docs
-
-- **Spec story 21** ("each Square shows a name and a reference photo") and **ticket 08**'s checkbox "Squares on the Card show their reference photo" conflict with this brief. The reference photo becomes an on-demand clue and part of the fact card.
-
 ## Open decisions
 
 - **Clue cost:** whether using a clue costs anything or is recorded on the Square (for example, a small mark). The mockup treats clues as free and leaves no trace on the Card.

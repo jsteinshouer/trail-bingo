@@ -8,7 +8,7 @@
 
 - [ ] Fact source adapter returns a summary, reference photo and attribution for a taxon from iNaturalist or Wikipedia — tested against recorded responses (normal, missing summary, error)
 - [ ] Facts and reference photos are fetched and stored at Card build time so they work offline
-- [ ] Squares on the Card show their reference photo
+- [ ] Tapping an unmarked Square offers its reference photo as a clue; the Card itself shows no reference photos (see `docs/design/card-grid/brief.md`)
 - [ ] A fact card appears after each matched Sighting and is dismissed with one tap
 - [ ] Tapping a marked Square reopens its fact card
 - [ ] Every fact card credits its source

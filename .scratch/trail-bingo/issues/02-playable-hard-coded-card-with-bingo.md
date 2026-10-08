@@ -2,6 +2,8 @@
 
 **What to build:** The first playable slice of the game. Set up the project (Vite + TypeScript, no framework, Vitest) and the game module as the single seam with its adapters plugged in. The app shows a hard-coded demo Card as a grid; a temporary developer-only control lets you mark Squares; completing a row, column or diagonal triggers a Bingo celebration and play continues; marking every Square triggers a bigger Blackout celebration. The Card shows the current Bingo count.
 
+**Design:** see `docs/design/card-grid/brief.md` and its mockup.
+
 **Blocked by:** None — can start immediately
 
 **Status:** ready-for-agent
