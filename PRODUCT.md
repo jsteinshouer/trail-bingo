@@ -37,6 +37,7 @@ Existing ID apps are reference tools, and most need signal. Trail Bingo is a gam
 
 - Vocabulary is fixed in `CONTEXT.md`: Card, Square, Wildcard, Sighting, Verified, Confirmed, Bingo, Blackout. Use these terms in UI copy and avoid the listed alternatives (board, tile, free space, capture, win, coverall…).
 - Fully static PWA, no backend, no accounts, no LLM (ADR 0001). Building a Card needs signal; playing does not.
+- Everything used during play is stored on the phone. The app shell, fonts and icons are cached by the service worker. The model, Card data, reference photos and facts are stored before the hike, and Sighting photos are stored when taken. Nothing loads from a third-party CDN at run time (no Google Fonts, no hotlinked images).
 - Sightings use an in-page square camera preview showing exactly what the model sees. Android's camera app is avoided because Chrome discarded the page in the spike.
 - Measured on the target phone: ~6 s cached model load, ~1.3 s per photo check on WebGPU; the WebAssembly fallback is slower (~1.75–2.5 s on the dev machine).
 - Verified and Confirmed must look different on the Card and count the same toward Bingo.

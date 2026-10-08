@@ -67,6 +67,7 @@ In the mockup, the orange "Mockup only" box in the detail (Mark Verified / Mark 
 ## Constraints
 
 - Android Chrome PWA; Vite + TypeScript, no framework (PRODUCT.md, spec).
+- **Everything is local.** Nothing on this screen may load from the network at play time. Fonts and icons ship in the app shell, which the service worker caches. Reference photos, facts and Square data are stored when the Card is built, and Sighting photos are stored when taken. No Google Fonts, CDNs or hotlinked images. The font files are ready in [fonts/](fonts/) (Barlow and Barlow Condensed, latin subset, SIL OFL).
 - Use the CONTEXT.md vocabulary in all copy: Card, Square, Wildcard, Sighting, Verified, Confirmed, Bingo, Blackout.
 - Sighting photos are stored on the phone with their Squares (spec story 49) and shown at Square size on the Card, so store or derive a small thumbnail.
 - Reference photos carry their iNaturalist or Wikipedia credit wherever they appear: under the clue, and on the fact card.
@@ -80,9 +81,8 @@ In the mockup, the orange "Mockup only" box in the detail (Mark Verified / Mark 
 ## Open decisions
 
 - **Clue cost:** whether using a clue costs anything or is recorded on the Square (for example, a small mark). The mockup treats clues as free and leaves no trace on the Card.
-- **Fonts offline:** fonts must be self-hosted so the installed PWA renders them offline. The mockup loads them from Google Fonts.
 - **Other screens:** the fact card, top-guesses picker, camera and Card builder aren't shaped yet. They inherit this world.
 
 ## Demonstration content
 
-The mockup's Card was assembled by hand to be plausible for Elkhorn, NE in October; the Card generator did not build it. The "Sighting photos" on marked Squares are iNaturalist photos standing in for the player's own. There's no spider Square because no openly licensed photo was found. All photo credits are listed in the mockup.
+The mockup's Card was assembled by hand to be plausible for Elkhorn, NE in October; the Card generator did not build it. The "Sighting photos" on marked Squares are iNaturalist photos standing in for the player's own. There's no spider Square because no openly licensed photo was found. The mockup is self-contained and works offline: fonts are in `fonts/` and photos in `photos/`, with every photo credit listed in the mockup.
