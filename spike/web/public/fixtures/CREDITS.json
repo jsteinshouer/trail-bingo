@@ -1,0 +1,30 @@
+[
+  {
+    "file": "populus-tremuloides.jpg",
+    "taxon": "Populus tremuloides",
+    "attribution": "(c) Bryan Connolly, some rights reserved (CC BY)",
+    "license": "cc-by",
+    "observation": "https://www.inaturalist.org/observations/257891028"
+  },
+  {
+    "file": "amanita-muscaria.jpg",
+    "taxon": "Amanita muscaria",
+    "attribution": "(c) Johan Adler, some rights reserved (CC BY)",
+    "license": "cc-by",
+    "observation": "https://www.inaturalist.org/observations/242423358"
+  },
+  {
+    "file": "odocoileus-hemionus.jpg",
+    "taxon": "Odocoileus hemionus",
+    "attribution": "(c) Daughter Dad, some rights reserved (CC BY)",
+    "license": "cc-by",
+    "observation": "https://www.inaturalist.org/observations/338896238"
+  },
+  {
+    "file": "achillea-millefolium.jpg",
+    "taxon": "Achillea millefolium",
+    "attribution": "(c) Eric Lamb, some rights reserved (CC BY)",
+    "license": "cc-by",
+    "observation": "https://www.inaturalist.org/observations/50063769"
+  }
+]

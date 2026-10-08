@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BioCLIP Spike</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>BioCLIP spike</h1>
+      <p class="lede">Ticket 01: does BioCLIP run in this browser, and how fast?</p>
+
+      <section>
+        <h2>1. Load the model</h2>
+        <div class="row">
+          <label>Precision
+            <select id="precision">
+              <option value="fp16" selected>fp16 (~300 MB)</option>
+              <option value="fp32">fp32 (~600 MB)</option>
+            </select>
+          </label>
+          <label>Backend
+            <select id="backend">
+              <option value="auto" selected>Auto (WebGPU → WASM)</option>
+              <option value="webgpu">WebGPU only</option>
+              <option value="wasm">WASM only</option>
+            </select>
+          </label>
+          <label>Graph optimization
+            <select id="optimization">
+              <option value="all" selected>All</option>
+              <option value="basic">Basic</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </label>
+        </div>
+        <button id="load" type="button">Load model</button>
+        <p id="status" class="status" role="status">Not loaded.</p>
+        <dl id="stats" class="stats"></dl>
+      </section>
+
+      <section>
+        <h2>2. Check photos</h2>
+        <div class="row">
+          <label class="button" id="camera-label">
+            Take a photo
+            <input id="camera" type="file" accept="image/*" capture="environment" disabled hidden />
+          </label>
+          <button id="fixtures" type="button" disabled>Run the 4 test photos</button>
+        </div>
+        <ol id="results" class="results"></ol>
+      </section>
+
+      <section>
+        <h2>3. Report</h2>
+        <button id="copy" type="button">Copy report</button>
+        <pre id="report" class="report"></pre>
+      </section>
+
+      <footer>
+        Test photos from iNaturalist (CC BY): see <a href="/fixtures/CREDITS.json">credits</a>.
+        Model: <a href="https://huggingface.co/imageomics/bioclip">imageomics/bioclip</a> (MIT).
+      </footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

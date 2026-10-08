@@ -1,0 +1,110 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f7f6f2;
+  --fg: #1d2a1f;
+  --muted: #5b6b5d;
+  --accent: #2f6b3a;
+  --accent-fg: #ffffff;
+  --card: #ffffff;
+  --border: #d9dcd3;
+  --good: #2f6b3a;
+  --bad: #a3342b;
+  font-family: system-ui, sans-serif;
+  line-height: 1.45;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141a15;
+    --fg: #e6ece4;
+    --muted: #9fb0a1;
+    --accent: #7cc48a;
+    --accent-fg: #0f1a11;
+    --card: #1d251e;
+    --border: #334036;
+    --good: #7cc48a;
+    --bad: #f08a80;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+h1 { margin: 0.5rem 0 0; font-size: 1.5rem; }
+h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
+.lede { color: var(--muted); margin-top: 0.25rem; }
+
+section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.row { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem; }
+label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; color: var(--muted); }
+
+select, button, .button {
+  font: inherit;
+  min-height: 2.75rem;
+  border-radius: 0.5rem;
+}
+
+select {
+  padding: 0 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+button, .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled, .button.disabled { opacity: 0.45; cursor: not-allowed; }
+
+.status { color: var(--muted); }
+.status.error { color: var(--bad); }
+
+.stats { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.75rem; margin: 0; font-size: 0.9rem; }
+.stats dt { color: var(--muted); }
+.stats dd { margin: 0; overflow-wrap: anywhere; }
+
+.results { padding-left: 1.25rem; margin: 0; }
+.results li { margin-bottom: 0.75rem; }
+.results .pass { color: var(--good); font-weight: 600; }
+.results .fail { color: var(--bad); font-weight: 600; }
+.results .guesses { color: var(--muted); font-size: 0.9rem; }
+
+.report {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+  background: var(--bg);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  margin: 0.75rem 0 0;
+}
+
+footer { color: var(--muted); font-size: 0.8rem; margin: 1rem 0 2rem; }
+footer a { color: inherit; }
