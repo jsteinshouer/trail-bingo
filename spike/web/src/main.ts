@@ -1,3 +1,4 @@
+import { MODEL_CACHE } from "./protocol";
 import type { BackendChoice, CheckResult, LoadStats, Optimization, Precision, Request, Response } from "./protocol";
 
 interface Label { scientific: string; common: string }
@@ -8,6 +9,7 @@ const precision = $<HTMLSelectElement>("precision");
 const backend = $<HTMLSelectElement>("backend");
 const optimization = $<HTMLSelectElement>("optimization");
 const loadButton = $<HTMLButtonElement>("load");
+const clearButton = $<HTMLButtonElement>("clear-cache");
 const status = $<HTMLParagraphElement>("status");
 const statsList = $<HTMLDListElement>("stats");
 const camera = $<HTMLInputElement>("camera");
@@ -174,6 +176,11 @@ fixturesButton.addEventListener("click", async () => {
   }
   setStatus("Ready.");
   fixturesButton.disabled = false;
+});
+
+clearButton.addEventListener("click", async () => {
+  const removed = await caches.delete(MODEL_CACHE);
+  setStatus(removed ? "Cached model cleared. The next load downloads it again." : "Nothing was cached.");
 });
 
 copyButton.addEventListener("click", async () => {

@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { centerSquare, toPixelValues } from "./preprocess";
+import { centerCrop, toPixelValues } from "./preprocess";
 
-describe("centerSquare", () => {
+describe("centerCrop", () => {
   it("takes the middle of a landscape photo", () => {
-    expect(centerSquare(4000, 3000)).toEqual({ x: 500, y: 0, side: 3000 });
+    expect(centerCrop(4000, 3000)).toEqual({ x: 500, y: 0, side: 3000 });
   });
 
   it("takes the middle of a portrait photo", () => {
-    expect(centerSquare(3000, 4000)).toEqual({ x: 0, y: 500, side: 3000 });
+    expect(centerCrop(3000, 4000)).toEqual({ x: 0, y: 500, side: 3000 });
   });
 
   it("keeps a square photo whole", () => {
-    expect(centerSquare(224, 224)).toEqual({ x: 0, y: 0, side: 224 });
+    expect(centerCrop(224, 224)).toEqual({ x: 0, y: 0, side: 224 });
   });
 
   it("rounds odd margins down", () => {
-    expect(centerSquare(225, 224)).toEqual({ x: 0, y: 0, side: 224 });
+    expect(centerCrop(225, 224)).toEqual({ x: 0, y: 0, side: 224 });
   });
 });
 

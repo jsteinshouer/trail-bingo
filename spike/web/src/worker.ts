@@ -2,8 +2,9 @@
 import * as ort from "onnxruntime-web/webgpu";
 import wasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url";
 import mjsUrl from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url";
-import { centerSquare, toPixelValues } from "./preprocess";
-import type { Backend, FileTiming, LoadStats, Optimization, Request, Response } from "./protocol";
+import { centerCrop, toPixelValues } from "./preprocess";
+import { MODEL_CACHE } from "./protocol";
+import type { Backend, BackendChoice, BackendInfo, FileTiming, LoadStats, Optimization, Request, Response } from "./protocol";
 import { rank } from "./rank";
 import { loadTokenizer, tokenize } from "./tokenize";
 
@@ -19,11 +20,10 @@ interface Manifest {
 }
 
 const MODELS = new URL("models/", new URL(import.meta.env.BASE_URL, self.location.origin));
-const CACHE = "bioclip-spike-v1";
 
 let state: {
   manifest: Manifest;
-  image: ort.InferenceSession;
+  imageSession: ort.InferenceSession;
   labelVectors: Float32Array;
 } | undefined;
 
@@ -33,7 +33,7 @@ const post = (message: Response) => self.postMessage(message);
 async function fetchCached(name: string): Promise<{ bytes: ArrayBuffer; timing: FileTiming }> {
   const start = performance.now();
   const url = new URL(name, MODELS).href;
-  const cache = await caches.open(CACHE);
+  const cache = await caches.open(MODEL_CACHE);
   const cached = await cache.match(url);
   let bytes: ArrayBuffer;
   let cacheError: string | undefined;
@@ -69,16 +69,16 @@ async function fetchJson<T>(name: string): Promise<T> {
   return response.json();
 }
 
-async function pickBackend(choice: Request & { type: "load" }): Promise<{
-  backend: Backend;
-  fallbackReason?: string;
-  gpu?: string;
-  shaderF16?: boolean;
-}> {
-  if (choice.backend === "wasm") return { backend: "wasm" };
-  if (!("gpu" in navigator)) return { backend: "wasm", fallbackReason: "navigator.gpu not available" };
+/** Choose a backend. "WebGPU only" fails loudly instead of falling back, so a test of WebGPU means WebGPU. */
+async function pickBackend(choice: BackendChoice): Promise<BackendInfo> {
+  if (choice === "wasm") return { backend: "wasm" };
+  const unavailable = (reason: string): BackendInfo => {
+    if (choice === "webgpu") throw new Error(`WebGPU unavailable: ${reason}`);
+    return { backend: "wasm", fallbackReason: reason };
+  };
+  if (!("gpu" in navigator)) return unavailable("navigator.gpu not available");
   const adapter = await navigator.gpu.requestAdapter();
-  if (!adapter) return { backend: "wasm", fallbackReason: "no WebGPU adapter" };
+  if (!adapter) return unavailable("no WebGPU adapter");
   const info = adapter.info;
   return {
     backend: "webgpu",
@@ -87,14 +87,30 @@ async function pickBackend(choice: Request & { type: "load" }): Promise<{
   };
 }
 
-async function createSession(bytes: ArrayBuffer, backend: Backend, optimization: Optimization) {
-  return ort.InferenceSession.create(new Uint8Array(bytes), {
-    executionProviders: [backend],
-    graphOptimizationLevel: optimization,
-  });
+/** Create both sessions on one backend; if the second fails, release the first so nothing leaks. */
+async function createSessions(
+  imageBytes: ArrayBuffer,
+  textBytes: ArrayBuffer,
+  backend: Backend,
+  optimization: Optimization,
+) {
+  const options = { executionProviders: [backend], graphOptimizationLevel: optimization };
+  const imageSession = await ort.InferenceSession.create(new Uint8Array(imageBytes), options);
+  try {
+    const textSession = await ort.InferenceSession.create(new Uint8Array(textBytes), options);
+    return { imageSession, textSession };
+  } catch (error) {
+    await imageSession.release();
+    throw error;
+  }
 }
 
 async function load(request: Request & { type: "load" }) {
+  // Loading again in the same tab (e.g. to time a cached load) must not keep the old model in memory.
+  if (state) {
+    await state.imageSession.release();
+    state = undefined;
+  }
   const totalStart = performance.now();
   const manifest = await fetchJson<Manifest>("manifest.json");
   const files = manifest.files[request.precision];
@@ -107,20 +123,18 @@ async function load(request: Request & { type: "load" }) {
   const image = await fetchCached(files.image);
   const text = await fetchCached(files.text);
 
-  let chosen = await pickBackend(request);
+  let chosen = await pickBackend(request.backend);
   post({ type: "progress", message: `Creating sessions on ${chosen.backend}…` });
   const sessionStart = performance.now();
-  let imageSession: ort.InferenceSession;
-  let textSession: ort.InferenceSession;
+  let sessions;
   try {
-    imageSession = await createSession(image.bytes, chosen.backend, request.optimization);
-    textSession = await createSession(text.bytes, chosen.backend, request.optimization);
+    sessions = await createSessions(image.bytes, text.bytes, chosen.backend, request.optimization);
   } catch (error) {
     if (chosen.backend !== "webgpu" || request.backend === "webgpu") throw error;
     chosen = { backend: "wasm", fallbackReason: `WebGPU session failed: ${String(error)}` };
-    imageSession = await createSession(image.bytes, "wasm", request.optimization);
-    textSession = await createSession(text.bytes, "wasm", request.optimization);
+    sessions = await createSessions(image.bytes, text.bytes, "wasm", request.optimization);
   }
+  const { imageSession, textSession } = sessions;
   const sessionMs = performance.now() - sessionStart;
 
   post({ type: "progress", message: "Encoding labels…" });
@@ -134,7 +148,7 @@ async function load(request: Request & { type: "load" }) {
   // The text encoder is only needed while building a Card; free it like the real app would.
   await textSession.release();
 
-  state = { manifest, image: imageSession, labelVectors };
+  state = { manifest, imageSession, labelVectors };
   const stats: LoadStats = {
     ...chosen,
     wasmThreads: ort.env.wasm.numThreads ?? 1,
@@ -149,23 +163,23 @@ async function load(request: Request & { type: "load" }) {
 
 async function check(request: Request & { type: "check" }) {
   if (!state) throw new Error("model not loaded");
-  const { manifest, image, labelVectors } = state;
+  const { manifest, imageSession, labelVectors } = state;
   const { size, mean, std } = manifest.preprocess;
 
   const preprocessStart = performance.now();
   const bitmap = await createImageBitmap(request.image);
-  const square = centerSquare(bitmap.width, bitmap.height);
+  const crop = centerCrop(bitmap.width, bitmap.height);
   const canvas = new OffscreenCanvas(size, size);
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) throw new Error("no 2D canvas context");
   context.imageSmoothingQuality = "high";
-  context.drawImage(bitmap, square.x, square.y, square.side, square.side, 0, 0, size, size);
+  context.drawImage(bitmap, crop.x, crop.y, crop.side, crop.side, 0, 0, size, size);
   bitmap.close();
   const pixels = toPixelValues(context.getImageData(0, 0, size, size).data, size, size, mean, std);
   const preprocessMs = performance.now() - preprocessStart;
 
   const inferenceStart = performance.now();
-  const output = await image.run({
+  const output = await imageSession.run({
     pixel_values: new ort.Tensor("float32", pixels, [1, 3, size, size]),
   });
   const photo = new Float32Array(output.embeddings.data as Float32Array);

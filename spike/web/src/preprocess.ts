@@ -3,13 +3,13 @@
  * taking the central square of the photo and scaling it to 224×224 (the canvas does the scaling).
  */
 
-export interface Square {
+export interface CropRegion {
   x: number;
   y: number;
   side: number;
 }
 
-export function centerSquare(width: number, height: number): Square {
+export function centerCrop(width: number, height: number): CropRegion {
   const side = Math.min(width, height);
   return {
     x: Math.floor((width - side) / 2),

@@ -81,6 +81,12 @@ button, .button {
   cursor: pointer;
 }
 
+button.secondary {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
 button:disabled, .button.disabled { opacity: 0.45; cursor: not-allowed; }
 
 .status { color: var(--muted); }

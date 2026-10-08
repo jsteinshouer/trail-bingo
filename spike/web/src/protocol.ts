@@ -1,5 +1,8 @@
 import type { Ranked } from "./rank";
 
+/** Cache API bucket holding the downloaded model files. */
+export const MODEL_CACHE = "bioclip-spike-v1";
+
 export type Precision = "fp16" | "fp32";
 export type BackendChoice = "auto" | "webgpu" | "wasm";
 export type Backend = "webgpu" | "wasm";
@@ -17,11 +20,14 @@ export interface FileTiming {
   ms: number;
 }
 
-export interface LoadStats {
+export interface BackendInfo {
   backend: Backend;
   fallbackReason?: string;
   gpu?: string;
   shaderF16?: boolean;
+}
+
+export interface LoadStats extends BackendInfo {
   wasmThreads: number;
   crossOriginIsolated: boolean;
   files: FileTiming[];
