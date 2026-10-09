@@ -353,6 +353,29 @@ button { font: inherit; color: inherit; }
 .guess:hover { background: #c6e0b1; }
 .guess:active { background: var(--purple); color: var(--paper); }
 
+/* ── First-launch setup: the sheet's margin notes, then the download ── */
+.setup {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column;
+  margin: 0 var(--gutter);
+  padding: 6px 0 20px;
+  border-top: 1.5px solid var(--ink);
+}
+.setup .lede { margin: 14px 0 0; font: 400 17px/1.5 var(--face-text); max-width: 38ch; }
+.legend { margin: 18px 0 0; display: grid; gap: 10px; }
+.legend div { padding: 10px 12px; background: var(--wood); border-left: 4px solid var(--contour); }
+.legend dt { font: 700 20px/1.1 var(--face-label); letter-spacing: .01em; }
+.legend dd { margin: 2px 0 0; font: 400 15px/1.4 var(--face-text); color: var(--ink-soft); }
+.download { margin-top: auto; padding-top: 22px; }
+.dl-bar { height: 14px; border: 1.5px solid var(--ink); background: repeating-linear-gradient(to right, var(--paper) 0 calc(10% - 1px), var(--ink) calc(10% - 1px) 10%); }
+.dl-bar i { display: block; height: 100%; width: 0; background: var(--purple); transition: width .3s linear; }
+.dl-label { margin: 8px 0 0; min-height: 1.2em; font: 600 15px/1.2 var(--face-label); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+.dl-label b { color: var(--ink); font-weight: 700; }
+[data-state="done"] .dl-label b { color: var(--purple-ink); }
+[data-state="failed"] .dl-label b { color: var(--contour-ink); }
+.dl-note { margin: 6px 0 0; font: 400 15px/1.45 var(--face-text); color: var(--ink-soft); max-width: 40ch; }
+.dl-note:empty { display: none; }
+
 /* ── Celebrations: printed revision stamps ────────────────────── */
 .stamp {
   position: absolute; left: 50%; top: 50%; z-index: 4;

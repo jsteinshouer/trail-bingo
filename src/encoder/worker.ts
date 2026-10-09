@@ -5,24 +5,15 @@ import { centerCrop, toPixelValues } from "./preprocess";
 import type { Backend, EncoderInfo, Request, Response } from "./protocol";
 import { loadTokenizer, tokenize } from "./tokenize";
 import type { Tokenizer } from "@huggingface/tokenizers";
+import { browserModelStore, type Manifest } from "../model";
 
 // BioCLIP in a Web Worker, as proven on the target phone by the spike (ticket 01).
 
 // The WebGPU build of onnxruntime-web 1.30 loads the "asyncify" WebAssembly variant.
 ort.env.wasm.wasmPaths = { wasm: wasmUrl, mjs: mjsUrl };
 
-/** Cache API bucket holding the model files. Ticket 04 adds the first-launch download with progress. */
-const MODEL_CACHE = "trail-bingo-models-v1";
-const MODELS = new URL("models/", new URL(import.meta.env.BASE_URL, self.location.origin));
 /** Labels per text-encoder run, so a few hundred local species don't need one huge tensor. */
 const TEXT_BATCH = 32;
-
-interface Manifest {
-  embeddingDim: number;
-  contextLength: number;
-  preprocess: { size: number; mean: number[]; std: number[] };
-  files: Record<string, { image: string; text: string }>;
-}
 
 interface Model {
   manifest: Manifest;
@@ -33,22 +24,9 @@ interface Model {
 
 const post = (message: Response, transfer: Transferable[] = []) => self.postMessage(message, { transfer });
 
-/** Model files come from the Cache API when they're there, so later loads work with no signal. */
-async function fetchCached(name: string): Promise<Uint8Array> {
-  const url = new URL(name, MODELS).href;
-  const cache = await caches.open(MODEL_CACHE);
-  const cached = await cache.match(url);
-  if (cached) return new Uint8Array(await cached.arrayBuffer());
-  post({ type: "progress", message: `Downloading ${name}…` });
-  const fresh = await fetch(url);
-  if (!fresh.ok) throw new Error(`${name}: HTTP ${fresh.status}`);
-  const bytes = await fresh.arrayBuffer();
-  // A full cache only costs the next load's speed; the model still runs from memory.
-  await cache.put(url, new Response(bytes)).catch(() => {});
-  return new Uint8Array(bytes);
-}
-
-const fetchJson = async <T>(name: string): Promise<T> => JSON.parse(new TextDecoder().decode(await fetchCached(name)));
+/** The setup screen downloaded the model; the photo check only ever reads it from browser storage. */
+const store = browserModelStore();
+const readJson = async <T>(name: string): Promise<T> => JSON.parse(new TextDecoder().decode(await store.read(name)));
 
 /** WebGPU when the browser has a usable adapter, otherwise WebAssembly. */
 async function pickBackend(): Promise<{ backend: Backend; fallbackReason?: string }> {
@@ -71,14 +49,14 @@ async function createSessions(image: Uint8Array, text: Uint8Array, backend: Back
 
 async function load(): Promise<Model> {
   const start = performance.now();
-  const manifest = await fetchJson<Manifest>("manifest.json");
+  const manifest = await readJson<Manifest>("manifest.json");
   const files = manifest.files.fp16;
   const [tokenizerJson, tokenizerConfig] = await Promise.all([
-    fetchJson<object>("tokenizer.json"),
-    fetchJson<object>("tokenizer_config.json"),
+    readJson<object>("tokenizer.json"),
+    readJson<object>("tokenizer_config.json"),
   ]);
-  const image = await fetchCached(files.image);
-  const text = await fetchCached(files.text);
+  const image = await store.read(files.image);
+  const text = await store.read(files.text);
 
   post({ type: "progress", message: "Starting the photo check…" });
   let chosen = await pickBackend();
