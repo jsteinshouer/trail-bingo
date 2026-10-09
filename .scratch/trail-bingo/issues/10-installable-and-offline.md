@@ -6,12 +6,12 @@
 
 **Status:** ready-for-agent
 
-- [ ] App has a web app manifest and icon and can be installed on Android Chrome
-- [ ] Service worker caches the app shell; new app versions update cleanly without re-downloading the model
-- [ ] With a Card built, in airplane mode: the installed app opens, Sightings are checked, Squares marked, fact cards shown, and progress saved
-- [ ] Building a Card while offline shows a clear "needs signal" message
-- [ ] Before the model download, the setup screen runs a device check: hard requirements block the download with a plain explanation; soft ones warn and let the player continue (tested with fake browser features)
-- [ ] After the download, a warm-up loads the model and encodes one label, and the setup screen says whether the photo check runs fast (WebGPU) or slower (WebAssembly); the Card builder warns that building may take several minutes on a slower phone
+- [x] App has a web app manifest and icon and can be installed on Android Chrome
+- [x] Service worker caches the app shell; new app versions update cleanly without re-downloading the model
+- [x] With a Card built, in airplane mode: the installed app opens, Sightings are checked, Squares marked, fact cards shown, and progress saved
+- [x] Building a Card while offline shows a clear "needs signal" message
+- [x] Before the model download, the setup screen runs a device check: hard requirements block the download with a plain explanation; soft ones warn and let the player continue (tested with fake browser features)
+- [x] After the download, a warm-up loads the model and encodes one label, and the setup screen says whether the photo check runs fast (WebGPU) or slower (WebAssembly); the Card builder warns that building may take several minutes on a slower phone
 
 ## Device check
 
@@ -39,3 +39,35 @@ Soft requirements (warn, continue):
 Two thresholds are estimates to tighten in ticket 11's hike test: the 4 GB memory line (the photo check's peak memory hasn't been measured on the phone) and the slower phone's Card build time (only measured on the dev machine).
 
 Keep the check a pure function that takes the browser features as input, so it can be tested with fakes like the other adapters.
+
+## Comments
+
+**Implemented on branch `10-installable-and-offline`.**
+
+- **Installable:** `public/manifest.webmanifest` (standalone, portrait, paper colours) and icons drawn from the Card's triangulation-station Wildcard mark on photorevision purple (`public/icons/`, regenerate with `scripts/draw-icons.py`). Chrome reported no installability errors.
+- **Service worker** (`src/offline/service-worker.ts`, built as `sw.js`):
+  - A Vite plugin in `vite.config.ts` gives it the app shell (every built file, plus the manifest and icons, about 27 MB, mostly ONNX Runtime's WebAssembly) and a version that changes with them.
+  - Pages in scope and the shell files come from the shell cache. `models/`, iNaturalist, OpenStreetMap and photos go to the network: the setup screen stores the model in its own cache.
+  - A new version installs alongside, takes over once the old pages close (no `skipWaiting`), and deletes only old shell caches; the model's cache stays.
+  - Registered in production builds only.
+  - The routing decisions (`src/offline/routes.ts`) are unit-tested; the spec's testing note now says so.
+- **Device check** (`src/device/`): `checkDevice(features)` is pure and unit-tested; `readDeviceFeatures()` reads the browser.
+  - On the setup screen, hard requirements block the download with an explanation; soft ones warn and let the player go on.
+  - If the check can't run, the download is allowed with a note.
+- **Warm-up:** after the download, the photo check loads and encodes one label. The setup screen says "fast on this phone" (WebGPU) or "works here, but slower…" (WebAssembly).
+  - A failed warm-up offers Try again (with a fresh photo check) instead of opening the game.
+  - The warmed-up photo check is the one the game uses.
+  - The Card builder shows a slow-phone note once the photo check reports WebAssembly.
+- **No signal:** building a Card or searching offline says it needs signal, and that the current Card still plays.
+  - The iNaturalist and Nominatim adapters throw `NoSignalError` when a request can't get through, so this works even when `navigator.onLine` claims to be online (Wi-Fi with no internet, or Chrome's offline emulation).
+- **Checked in headless Chromium** against a production build (`vite preview`):
+  - Setup: device check (two warnings), download, warm-up ("slower"), builder slow note.
+  - A Card built online.
+  - **Offline:** reload opened the app from the service worker with the Card; a Sighting was checked and marked and its fact card shown; the mark survived another offline reload. Building offline gave the needs-signal message, and so did searching.
+  - **New build:** 0 model requests and no setup screen. After closing and reopening, the new shell was active and the old shell cache gone, with the model cache kept.
+- **For ticket 11 (by hand on the phone):**
+  - Install to the home screen and play in airplane mode.
+  - Check how soon an installed app that Android suspends rather than closes picks up a new version.
+  - The slow-phone note appears once the photo check has loaded (a few seconds after opening).
+  - The module-worker check proves the browser knows module workers, not that one starts; the warm-up proves that.
+  - Free storage is quota minus usage, so a half-finished download counts against it.

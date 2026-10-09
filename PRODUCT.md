@@ -50,7 +50,7 @@ Existing ID apps are reference tools, and most need signal. Trail Bingo is a gam
 
 - Name: **Trail Bingo**.
 - Voice: warm field guide. Curious, plain-spoken, a little naturalist. Facts are the reward; the game stays light. Copy should read well to kids and adults alike.
-- No logo or identity assets exist yet.
+- App icon: the Card's triangulation-station Wildcard mark in paper on photorevision purple (`public/icons/`, drawn by `scripts/draw-icons.py`). No other logo or identity assets exist yet.
 
 ## Evidence on Hand
 

@@ -1,3 +1,4 @@
+import { isFast, SLOW_PHOTO_CHECK, type DeviceProblem } from "../device";
 import type { DeviceCheck } from "../device";
 import type { EncoderInfo } from "../encoder";
 import { DownloadStalledError, type DownloadProgress, type ModelStore } from "../model";
@@ -62,26 +63,30 @@ export function mountSetupScreen(root: HTMLElement, models: ModelStore, options:
   const go = $<HTMLButtonElement>("[data-go]");
   const goLabel = $("[data-go] .label");
   const device = $(".device");
+  /** The model is stored. */
+  let downloaded = false;
+  /** The photo check has run once: the game can open. */
   let ready = false;
+  let latest: DownloadProgress | null = null;
+
+  const paragraphs = (problems: DeviceProblem[], className: string) =>
+    problems.map((p) => `<p class="${className}">${esc(p.message)}</p>`).join("");
 
   // Nothing is downloaded until the phone passes; warnings don't stop anyone.
   options.checkDevice().then(
     ({ blockers, warnings }) => {
-      const list = (problems: DeviceCheck["blockers"], className: string) =>
-        problems.map((p) => `<p class="${className}">${esc(p.message)}</p>`).join("");
       device.innerHTML = blockers.length
-        ? `<h2>This phone can't run Trail Bingo</h2>${list(blockers, "problem")}`
-        : list(warnings, "hint");
+        ? `<h2>This phone can't run Trail Bingo</h2>${paragraphs(blockers, "problem")}`
+        : paragraphs(warnings, "hint");
       if (blockers.length) goLabel.textContent = "Can't download on this phone";
       go.disabled = blockers.length > 0;
     },
     // A check that can't run shouldn't stand in the way; the download reports real trouble.
     () => {
-      device.innerHTML = "";
+      device.innerHTML = `<p class="hint">This phone couldn't be checked first. If something's missing, the download will say so.</p>`;
       go.disabled = false;
     },
   );
-  let latest: DownloadProgress | null = null;
 
   function showProgress(progress: DownloadProgress) {
     latest = progress;
@@ -102,17 +107,12 @@ export function mountSetupScreen(root: HTMLElement, models: ModelStore, options:
     const wake = await navigator.wakeLock?.request("screen").catch(() => null);
     try {
       const { persisted } = await models.download(showProgress);
-      ready = true;
+      downloaded = true;
       root.dataset.state = "done";
       go.querySelector("svg")?.remove();
-      const keep = persisted
+      note.textContent = persisted
         ? ""
-        : " Your browser may clear it if your phone runs low on space. Installing Trail Bingo to your home screen helps keep it.";
-      label.innerHTML = "<b>Downloaded.</b> Getting the photo check ready…";
-      goLabel.textContent = "Starting the photo check…";
-      note.textContent = keep.trim();
-      label.innerHTML = await warmUp();
-      goLabel.textContent = "Open your Card";
+        : "Your browser may clear it if your phone runs low on space. Installing Trail Bingo to your home screen helps keep it.";
     } catch (error) {
       root.dataset.state = "failed";
       // A file that never started has no size yet, so the bar's total would be wrong until the next try.
@@ -126,19 +126,29 @@ export function mountSetupScreen(root: HTMLElement, models: ModelStore, options:
       go.disabled = false;
       go.focus();
     }
+    if (downloaded) await warmUp();
   }
 
-  /** Runs the photo check once, so the player knows it works here and how fast it is. */
-  async function warmUp(): Promise<string> {
+  /** Runs the photo check once, so the player knows it works here and how fast it is. Until it does, the game stays shut. */
+  async function warmUp() {
+    go.disabled = true;
+    label.innerHTML = "<b>Downloaded.</b> Getting the photo check ready…";
+    goLabel.textContent = "Starting the photo check…";
     try {
       const { backend } = await options.warmUp();
-      return backend === "webgpu"
+      ready = true;
+      label.innerHTML = isFast(backend)
         ? "<b>Ready.</b> The photo check is fast on this phone."
-        : "<b>Ready.</b> The photo check works here, but slower: each check takes a few seconds, and building a Card can take several minutes.";
+        : `<b>Ready.</b> The photo check works here, but slower: ${SLOW_PHOTO_CHECK}`;
+      goLabel.textContent = "Open your Card";
     } catch (error) {
-      return `<b>Downloaded,</b> but the photo check couldn't start: ${esc(messageOf(error))}`;
+      label.innerHTML = `<b>The photo check couldn't start.</b> ${esc(messageOf(error))}`;
+      goLabel.textContent = "Try again";
+    } finally {
+      go.disabled = false;
+      go.focus();
     }
   }
 
-  go.addEventListener("click", () => (ready ? options.onReady() : download()));
+  go.addEventListener("click", () => (ready ? options.onReady() : downloaded ? warmUp() : download()));
 }

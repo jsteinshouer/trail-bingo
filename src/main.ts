@@ -63,9 +63,15 @@ else
     checkDevice: async () => checkDevice(await readDeviceFeatures()),
     async warmUp() {
       const encoder = startPhotoCheck();
-      const info = await encoder.ready;
-      await encoder.encodeText([WARM_UP_LABEL]);
-      return info;
+      try {
+        const info = await encoder.ready;
+        await encoder.encodeText([WARM_UP_LABEL]);
+        return info;
+      } catch (error) {
+        // Trying again starts a fresh photo check.
+        photoCheck = null;
+        throw error;
+      }
     },
     onReady: startGame,
   });

@@ -1,4 +1,6 @@
 import { NotEnoughSpeciesError, type BuildProgress, type CardGroup, type CardSize, type Game, type Place } from "../game";
+import { isFast, SLOW_PHOTO_CHECK } from "../device";
+import type { EncoderInfo } from "../encoder";
 import type { FoundPlace } from "../places";
 import { NoSignalError } from "../signal";
 import { ICON_CLOSE, ICON_LOCATE, kindGlyph } from "./icons";
@@ -32,7 +34,7 @@ export interface BuilderOptions {
   /** The new Card is the active one and ready offline. */
   onBuilt(): void;
   /** Settles when the photo check is ready, saying how it runs here. */
-  photoCheck: Promise<{ backend: string }>;
+  photoCheck: Promise<EncoderInfo>;
 }
 
 /** Building a Card asks iNaturalist what lives nearby, so it can't happen offline; playing can. */
@@ -56,8 +58,8 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
       <button class="close" type="button" aria-label="Close">${ICON_CLOSE}</button>
     </header>
     <form class="builder-body">
-      <p class="hint slow-note" hidden>This phone runs the photo check without its graphics chip, so building a Card can take
-        several minutes. Keep the screen on until it's ready.</p>
+      <p class="hint slow-note" hidden>The photo check runs more slowly on this phone: ${SLOW_PHOTO_CHECK} Keep the screen
+        on until the Card is ready.</p>
       <fieldset class="where">
         <legend>Where</legend>
         <div class="search-row">
@@ -109,7 +111,7 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
 
   // On a slower phone, say up front that building takes a while.
   options.photoCheck.then(
-    ({ backend }) => ($(".slow-note").hidden = backend === "webgpu"),
+    ({ backend }) => ($(".slow-note").hidden = isFast(backend)),
     () => {},
   );
 
@@ -161,7 +163,7 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
 
   async function runSearch() {
     if (!navigator.onLine) {
-      searchNote.innerHTML = `<span class="problem">Searching for a place needs signal. You can still use your location.</span>`;
+      searchNote.innerHTML = `<span class="problem">Searching for a place needs signal.</span>`;
       return;
     }
     const name = query.value.trim();
@@ -183,7 +185,11 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
       placeList.hidden = !results.length;
       placeItems.querySelector<HTMLElement>("button")?.focus();
     } catch (error) {
-      searchNote.innerHTML = `<span class="problem">${esc(messageOf(error))} You can still use your location.</span>`;
+      // Without signal nothing builds; with it, only the search is down, and the player's location still works.
+      searchNote.innerHTML =
+        error instanceof NoSignalError
+          ? `<span class="problem">Searching for a place needs signal.</span>`
+          : `<span class="problem">${esc(messageOf(error))} You can still use your location.</span>`;
     } finally {
       searchButton.disabled = false;
     }
@@ -239,9 +245,15 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
       <p class="dl-label"><b>${done}</b> of ${total} species</p>`;
   }
 
+  /** Says a Card can't be built offline, when the phone knows it's offline. */
+  function offline(): boolean {
+    if (navigator.onLine) return false;
+    showStatus(`<p class="problem">${esc(NEEDS_SIGNAL)}</p>`);
+    return true;
+  }
+
   async function buildCard() {
-    if (!place) return;
-    if (!navigator.onLine) return showStatus(`<p class="problem">${esc(NEEDS_SIGNAL)}</p>`);
+    if (!place || offline()) return;
     // Read the choices first: the form's controls are disabled while building, and FormData skips disabled ones.
     const request = { place, size: size(), groups: groups() };
     building = true;
@@ -283,7 +295,7 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
   });
   build.addEventListener("click", () => {
     // No point asking to replace the Card when a new one can't be built.
-    if (!navigator.onLine) return showStatus(`<p class="problem">${esc(NEEDS_SIGNAL)}</p>`);
+    if (offline()) return;
     return game.hasCard() ? confirmReplace() : buildCard();
   });
   status.addEventListener("click", (event) => {
