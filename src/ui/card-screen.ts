@@ -4,6 +4,7 @@ import {
   ICON_CAMERA,
   ICON_CLOSE,
   ICON_CONFIRMED,
+  ICON_EYE,
   ICON_GRID,
   ICON_IMPRINT,
   ICON_READY,
@@ -12,7 +13,8 @@ import {
   kindOf,
 } from "./icons";
 import { mountSighting } from "./sighting";
-import { esc, looksLike, messageOf, monthName, namedTaxon, placeTitle, secondLine, theCard } from "./text";
+import { factCard, photoCredit, referencePhoto, releasePhotos } from "./fact-card";
+import { esc, looksLike, messageOf, monthName, namedTaxon, placeTitle, secondLine, theCard, withArticle } from "./text";
 
 const MARK_LABEL: Record<Mark, string> = { verified: "Verified", confirmed: "Confirmed" };
 const MARK_NOTE: Record<Mark, string> = {
@@ -68,7 +70,6 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
       </div>
       <div class="bingos"><output aria-live="polite">0</output><span data-bingo-word>Bingos</span></div>
     </footer>
-    <p class="found-note" role="status" hidden></p>
     <button class="sighting" type="button" data-take disabled>${ICON_CAMERA}<span class="label">Loading the photo check…</span></button>
     <div class="detail" hidden>
       <button class="scrim" type="button" tabindex="-1" aria-label="Close"></button>
@@ -92,8 +93,11 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
       paint(state);
       restart(cells[index], "just");
       drawRoutes(state, new Set(outcome.newBingos.map(String)));
-      if (state.size === 5) tellFound(state.squares[index]);
-      celebrate(state, outcome);
+      // The fact card comes up once the photo has developed; the celebration waits until it's dismissed.
+      pendingCelebration = { state, outcome };
+      setTimeout(() => {
+        if (openIndex === null) openDetail(index);
+      }, 800);
     },
     onClose: () => take.focus(),
   });
@@ -119,6 +123,10 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     hideDetail();
     for (const url of photos.values()) URL.revokeObjectURL(url);
     photos.clear();
+    shownClues.clear();
+    releasePhotos();
+    // A new Card doesn't celebrate the old one.
+    pendingCelebration = null;
     const state = game.state();
     const { place, month, size } = state;
     const dLat = place.radiusKm / 111;
@@ -190,27 +198,17 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     $("[data-bingo-word]").textContent = state.bingoCount === 1 ? "Bingo" : "Bingos";
   }
 
-  /* ── What filled a broad Square ─────────────────────────────── */
-
-  const foundNote = $(".found-note");
-  let foundTimer: ReturnType<typeof setTimeout> | undefined;
-
-  /**
-   * Says what a broad animal Square or the Wildcard was filled with, on a 5×5
-   * Card, whose Squares have no room for the second line that says it.
-   */
-  function tellFound(square: MarkedSquare) {
-    if (!square.found) return;
-    const name = square.kind === "wildcard" ? "Wildcard" : square.kind === "animal" ? square.name : null;
-    if (!name) return;
-    foundNote.innerHTML = `<b>${esc(name)}</b> · ${looksLike(square.found)}`;
-    foundNote.hidden = false;
-    restart(foundNote, "show");
-    clearTimeout(foundTimer);
-    foundTimer = setTimeout(() => (foundNote.hidden = true), 4500);
-  }
-
   /* ── Celebrations ─────────────────────────────────────────────── */
+
+  /** A mark's celebration, held back while its fact card is open. */
+  let pendingCelebration: { state: CardState; outcome: MarkOutcome } | null = null;
+
+  function celebratePending() {
+    if (!pendingCelebration) return;
+    const { state, outcome } = pendingCelebration;
+    pendingCelebration = null;
+    celebrate(state, outcome);
+  }
 
   function celebrate(state: CardState, outcome: MarkOutcome) {
     // The last mark always completes lines too; the bigger Blackout plate replaces the Bingo stamp.
@@ -274,6 +272,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     detail.hidden = true;
     openIndex = null;
     if (lastFocus?.isConnected) lastFocus.focus();
+    celebratePending();
   }
 
   function renderDetail() {
@@ -284,25 +283,57 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     let meta: string;
     let body = "";
     if (square.kind === "wildcard") {
-      meta = "Any living thing the photo check recognizes, on this Card or not.";
+      meta = square.found
+        ? `Filled by ${namedTaxon(square.found)}`
+        : "Any living thing the photo check recognizes, on this Card or not.";
       if (!square.mark) body = '<p class="hint">Fill it by photographing anything living that isn\'t already marked on your Card.</p>';
     } else if (square.kind === "animal") {
-      meta = "Any species in this group counts.";
+      meta = square.found ? looksLike(square.found) : "Any species in this group counts.";
     } else {
       meta = `<i>${esc(square.scientificName)}</i> · ${KIND_LABEL[kindOf(square)]}`;
     }
     if (square.mark) {
+      // A marked Square is its fact card: the player's photo, how it was marked, then what it was.
       const photo = photos.get(index);
-      body =
-        (photo ? `<div class="photo"><img src="${photo}" alt="Your Sighting of ${esc(name)}"></div>` : "") +
-        `<div class="status ${square.mark}">${MARK_LABEL[square.mark]}<small>${MARK_NOTE[square.mark]}</small></div>` +
-        (square.found ? `<p class="hint">${square.kind === "wildcard" ? "Filled by" : "Looks like"} ${namedTaxon(square.found)}.</p>` : "");
+      const found = square.kind === "species" ? square : square.found;
+      const status = `<div class="status ${square.mark}">${MARK_LABEL[square.mark]}<small>${MARK_NOTE[square.mark]}</small></div>`;
+      body = found
+        ? factCard(found, game.factFor(found), { sightingPhoto: photo, status })
+        : (photo ? `<div class="photo"><img src="${photo}" alt="Your Sighting of ${esc(name)}"></div>` : "") + status;
+    } else if (square.kind !== "wildcard") {
+      body = clueHtml(index);
     }
 
     panel.innerHTML = `<div class="panel-head${square.kind === "wildcard" ? " wild" : ""}">${glyph(square)}
         <div><h2 id="detail-name">${esc(name)}</h2><p class="meta">${meta}</p></div>
         <button class="close" type="button" aria-label="Close">${ICON_CLOSE}</button></div>${body}`;
     panel.querySelector(".close")!.addEventListener("click", closeDetail);
+    const clueMap = panel.querySelector<SVGSVGElement>(".clue .contours");
+    if (clueMap) contourField(clueMap, clueMap.clientWidth, clueMap.clientHeight, [{ x: 0.72, y: 0.3, rings: 14, ph: 1.4 }]);
+    panel.querySelector("[data-clue]")?.addEventListener("click", () => {
+      shownClues.add(index);
+      renderDetail();
+      panel.querySelector<HTMLElement>(".close")!.focus();
+    });
+  }
+
+  /** Squares whose clue the player has revealed on this Card. */
+  const shownClues = new Set<number>();
+
+  /** An unmarked Square's clue: hidden behind a button until asked for, since spotting it unaided is the game. */
+  function clueHtml(index: number): string {
+    const clue = game.clue(index);
+    const photo = clue?.fact?.photo;
+    if (!clue || !photo) return '<p class="hint">There\'s no clue photo for this one.</p>';
+    const square = game.state().squares[index];
+    if (!shownClues.has(index)) {
+      return `<div class="clue"><svg class="contours" aria-hidden="true"></svg>
+          <button class="clue-btn" type="button" data-clue>${ICON_EYE}Show a clue</button></div>
+        <p class="hint">Stuck? A clue shows a photo of what to look for.</p>`;
+    }
+    const example = square.kind === "animal" ? `For example, ${withArticle(clue.taxon.name)}. ` : "";
+    return `<div class="clue">${referencePhoto(clue.taxon, photo.image)}</div>
+      <p class="credit">${esc(example)}${photoCredit(photo.credit)}</p>`;
   }
 
   $(".scrim").addEventListener("click", closeDetail);

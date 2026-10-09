@@ -2,6 +2,7 @@ import "./ui/style.css";
 import { createGame } from "./game";
 import { createBioclipEncoder } from "./encoder";
 import { browserModelStore } from "./model";
+import { createInatFactSource } from "./facts";
 import { createPlaceSearch, currentPosition } from "./places";
 import { createInatSpeciesSource } from "./species";
 import { mountBuilder } from "./ui/builder";
@@ -15,7 +16,7 @@ const web = { fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(inp
 function startGame() {
   app.setAttribute("aria-label", "Trail Bingo Card");
   const encoder = createBioclipEncoder();
-  const game = createGame({ encoder, species: createInatSpeciesSource(web) });
+  const game = createGame({ encoder, species: createInatSpeciesSource(web), facts: createInatFactSource(web) });
   const screen = mountCardScreen(app, game, encoder, { onNewCard: () => builder.open() });
   const builder = mountBuilder(app, game, {
     locate: currentPosition,

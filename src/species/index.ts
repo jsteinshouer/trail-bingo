@@ -28,7 +28,7 @@ const ICONIC_TAXA = ["Plantae,Fungi", "Mammalia,Aves,Reptilia,Amphibia,Insecta,A
 
 interface SpeciesCount {
   count: number;
-  taxon: { name: string; preferred_common_name?: string; ancestor_ids: number[] };
+  taxon: { id: number; name: string; preferred_common_name?: string; ancestor_ids: number[] };
 }
 
 function groupOf(ancestors: number[]): SpeciesGroup | AnimalGroup | null {
@@ -72,7 +72,7 @@ export function createInatSpeciesSource({ fetch }: { fetch: typeof globalThis.fe
         // Arachnids other than spiders don't fill any Square.
         if (!group) return [];
         const name = taxon.preferred_common_name ? capitalize(taxon.preferred_common_name) : taxon.name;
-        return [{ group, name, scientificName: taxon.name, observations: count }];
+        return [{ group, name, scientificName: taxon.name, taxonId: taxon.id, observations: count }];
       });
     },
   };

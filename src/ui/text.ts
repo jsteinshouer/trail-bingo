@@ -42,8 +42,9 @@ export const taxonName = (taxon: Taxon) => (hasCommonName(taxon) ? esc(taxon.nam
 export const namedTaxon = (taxon: Taxon) =>
   hasCommonName(taxon) ? `${esc(taxon.name)} (<i>${esc(taxon.scientificName)}</i>)` : taxonName(taxon);
 
+/** "an Eastern Fox Squirrel". Plain text. */
+export const withArticle = (name: string) => `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name}`;
+
 /** "Looks like an Eastern Fox Squirrel": what a Sighting matched. HTML. */
 export const looksLike = (taxon: Taxon) =>
-  hasCommonName(taxon)
-    ? `Looks like ${/^[aeiou]/i.test(taxon.name) ? "an" : "a"} ${taxonName(taxon)}`
-    : `Looks like ${taxonName(taxon)}`;
+  hasCommonName(taxon) ? `Looks like ${esc(withArticle(taxon.name))}` : `Looks like ${taxonName(taxon)}`;

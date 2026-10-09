@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGame, VERIFIED_GAP, type Card, type Encoder, type SightingOutcome, type SpeciesSource, type Square, type Taxon } from "./index";
+import { createGame, VERIFIED_GAP, type Card, type Encoder, type SightingOutcome, type FactSource, type SpeciesSource, type Square, type Taxon } from "./index";
 
 /*
  * The fake encoder gives every label its own axis, so a photo's cosine with a
@@ -82,9 +82,10 @@ function photo(scores: Record<string, number>): Float32Array {
 
 // These tests load a Card by hand, so the species source is never asked.
 const species: SpeciesSource = { speciesNear: async () => [] };
+const noFacts: FactSource = { factsFor: async () => new Map() };
 
 function playing(card: Card = CARD) {
-  const game = createGame({ encoder: fakeEncoder(), species });
+  const game = createGame({ encoder: fakeEncoder(), species, facts: noFacts });
   game.loadCard(card);
   return game;
 }
@@ -251,7 +252,7 @@ describe("label encoding", () => {
     const flaky: Encoder = {
       encodeText: (labels) => (failures-- > 0 ? Promise.reject(new Error("out of memory")) : encoder.encodeText(labels)),
     };
-    const game = createGame({ encoder: flaky, species });
+    const game = createGame({ encoder: flaky, species, facts: noFacts });
     game.loadCard(CARD);
     const sure = photo({ "Quercus macrocarpa": 0.33, "Celtis occidentalis": 0.33 - SURE });
     await expect(game.sighting(sure)).rejects.toThrow("out of memory");

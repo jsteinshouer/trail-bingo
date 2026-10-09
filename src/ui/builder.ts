@@ -205,12 +205,19 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
         `<p class="hint">${progress.radiusKm > 10 ? `Not enough within 10 km, so looking within ${progress.radiusKm} km` : `Looking for what's been seen within ${progress.radiusKm} km`}
           from ${months}, in any year…</p>`,
       );
+    } else if (progress.step === "facts") {
+      showStatus(stepBar(`Saving facts and photos for ${progress.total} local species, so you can read them with no signal.`, "Facts saved", progress));
     } else {
-      const percent = progress.total ? Math.floor((progress.done / progress.total) * 100) : 0;
-      showStatus(`<p class="hint">Getting the photo check ready for ${progress.total} local species, so it works with no signal.</p>
-        <div class="dl-bar" role="progressbar" aria-label="Photo check ready" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div>
-        <p class="dl-label"><b>${progress.done}</b> of ${progress.total} species</p>`);
+      showStatus(stepBar(`Getting the photo check ready for ${progress.total} local species, so it works with no signal.`, "Photo check ready", progress));
     }
+  }
+
+  /** A build step's note and progress bar. */
+  function stepBar(note: string, label: string, { done, total }: { done: number; total: number }) {
+    const percent = total ? Math.floor((done / total) * 100) : 0;
+    return `<p class="hint">${note}</p>
+      <div class="dl-bar" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div>
+      <p class="dl-label"><b>${done}</b> of ${total} species</p>`;
   }
 
   async function buildCard() {

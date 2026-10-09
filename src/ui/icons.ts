@@ -41,6 +41,10 @@ export const ICON_VERIFIED =
 export const ICON_CONFIRMED =
   '<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true"><path d="M3.5 13.2c1.6.9 3.1 2.6 4.4 5.1 2.4-6.3 6.6-11.3 12.6-14.6" fill="none" stroke="#fdfdfb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/><path d="M3.5 13.2c1.6.9 3.1 2.6 4.4 5.1 2.4-6.3 6.6-11.3 12.6-14.6" fill="none" stroke="#5c2170" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+/** "Show a clue". */
+export const ICON_EYE =
+  '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+
 export const ICON_CLOSE =
   '<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M5 5l12 12M17 5 5 17" stroke="currentColor" stroke-width="2"/></svg>';
 

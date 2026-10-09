@@ -9,6 +9,9 @@ import {
   type CardRequest,
   type CardSize,
   type Encoder,
+  type Fact,
+  type FactSource,
+  type PhotoSize,
   type LocalSpecies,
   type MarkedSquare,
   type SpeciesGroup,
@@ -72,6 +75,21 @@ function fakeEncoder(): Encoder & { labels: string[] } {
   };
 }
 
+/** A fact for every taxon it's asked about, recording which taxa were asked for at which photo size. */
+function fakeFacts(): FactSource & { asked: Map<PhotoSize, string[]>; fail?: Error } {
+  const asked = new Map<PhotoSize, string[]>();
+  const source: FactSource & { asked: Map<PhotoSize, string[]>; fail?: Error } = {
+    asked,
+    async factsFor(taxa, { photoSize, onProgress }) {
+      if (source.fail) throw source.fail;
+      asked.set(photoSize, [...(asked.get(photoSize) ?? []), ...taxa.map((t) => t.scientificName)]);
+      taxa.forEach((_, i) => onProgress?.(i + 1));
+      return new Map(taxa.map((t): [string, Fact] => [t.scientificName, { summary: `All about ${t.name}.` }]));
+    },
+  };
+  return source;
+}
+
 /** A small seeded random number generator (mulberry32), so builds are repeatable. */
 function seeded(seed: number) {
   return () => {
@@ -85,13 +103,15 @@ function seeded(seed: number) {
 function setup(options: { near?: LocalSpecies[]; wider?: LocalSpecies[]; today?: Date; seed?: number } = {}) {
   const species = fakeSpecies(options.near ?? PLENTY, options.wider);
   const encoder = fakeEncoder();
+  const facts = fakeFacts();
   const game = createGame({
     encoder,
     species,
+    facts,
     now: () => options.today ?? new Date(2026, 9, 8),
     random: seeded(options.seed ?? 1),
   });
-  return { game, species, encoder };
+  return { game, species, encoder, facts };
 }
 
 const request = (size: CardSize, groups: CardGroup[] = ALL_GROUPS): CardRequest => ({ place: ELKHORN, size, groups });
@@ -378,6 +398,10 @@ describe("progress while building", () => {
 
     expect(log[0]).toEqual({ step: "species", radiusKm: 10, months: [9, 10, 11] });
     expect(log[1]).toEqual({ step: "species", radiusKm: 25, months: [9, 10, 11] });
+    const facts = log.filter((p) => p.step === "facts");
+    expect(facts.at(-1)).toEqual({ step: "facts", done: 100, total: 100 });
+    // Facts come before the long label encoding, while there's still signal.
+    expect(log.findIndex((p) => p.step === "facts")).toBeLessThan(log.findIndex((p) => p.step === "labels"));
     const labels = log.filter((p) => p.step === "labels");
     expect(labels.length).toBeGreaterThan(1);
     expect(labels.at(-1)).toEqual({ step: "labels", done: 100, total: 100 });
@@ -397,7 +421,7 @@ describe("replacing a Card", () => {
 
   it("keeps the current Card and its marks when a new one can't be built", async () => {
     const species = fakeSpecies(PLENTY);
-    const game = createGame({ encoder: fakeEncoder(), species, random: seeded(1) });
+    const game = createGame({ encoder: fakeEncoder(), species, facts: fakeFacts(), random: seeded(1) });
     const first = await game.buildCard(request(3));
     game.mark(0, "verified");
 
@@ -413,5 +437,68 @@ describe("replacing a Card", () => {
     expect(game.hasCard()).toBe(false);
     await game.buildCard(request(3));
     expect(game.hasCard()).toBe(true);
+  });
+});
+
+describe("facts on a built Card", () => {
+  const near = [...observed("tree", 30), ...observed("plant", 10), ...observed("mammal", 3), ...observed("bird", 2)];
+
+  it("are fetched for every local species: bigger photos for the Card's Squares and animal clues, smaller for the rest", async () => {
+    const { game, facts } = setup({ near });
+    const card = await game.buildCard(request(3, ["tree", "animal"]));
+
+    const onCard = card.squares.flatMap((s) => (s.kind === "species" ? [s.scientificName] : []));
+    const animalClues = card.squares.flatMap((s) => (s.kind === "animal" ? [`${s.group} sci 1`] : []));
+    expect(facts.asked.get("medium")?.sort()).toEqual([...onCard, ...animalClues].sort());
+    const all = [...(facts.asked.get("medium") ?? []), ...(facts.asked.get("small") ?? [])];
+    expect(all.sort()).toEqual(near.map((s) => s.scientificName).sort());
+  });
+
+  it("are there for any local species, on the Card or not", async () => {
+    const { game } = setup({ near });
+    await game.buildCard(request(3, ["tree", "animal"]));
+
+    expect(game.factFor({ group: "plant", name: "plant 4", scientificName: "plant sci 4" })).toEqual({ summary: "All about plant 4." });
+    expect(game.factFor({ group: "plant", name: "Nowhere", scientificName: "nowhere sci" })).toBeUndefined();
+  });
+
+  it("give a species Square its own species as the clue", async () => {
+    const { game } = setup({ near });
+    const card = await game.buildCard(request(3, ["tree", "animal"]));
+    const tree = card.squares.findIndex((s) => s.kind === "species");
+    const square = card.squares[tree];
+    if (square.kind !== "species") throw new Error("expected a species Square");
+
+    expect(game.clue(tree)).toEqual({
+      taxon: expect.objectContaining({ scientificName: square.scientificName }),
+      fact: { summary: `All about ${square.name}.` },
+    });
+  });
+
+  it("give a broad animal Square its most observed local species as the clue", async () => {
+    const { game } = setup({ near });
+    const card = await game.buildCard(request(3, ["tree", "animal"]));
+    const mammal = card.squares.findIndex((s) => s.kind === "animal" && s.group === "mammal");
+
+    expect(game.clue(mammal)).toEqual({
+      taxon: expect.objectContaining({ scientificName: "mammal sci 1" }),
+      fact: { summary: "All about mammal 1." },
+    });
+  });
+
+  it("give the Wildcard no clue", async () => {
+    const { game } = setup({ near });
+    const card = await game.buildCard(request(3, ["tree", "animal"]));
+
+    expect(game.clue(card.squares.findIndex((s) => s.kind === "wildcard"))).toBeNull();
+  });
+
+  it("must all arrive before the Card replaces the current one", async () => {
+    const { game, facts } = setup({ near });
+    const first = await game.buildCard(request(3, ["tree", "animal"]));
+    facts.fail = new Error("Couldn't reach iNaturalist for facts");
+
+    await expect(game.buildCard(request(4, ["tree", "animal"]))).rejects.toThrow(/facts/);
+    expect(game.state().size).toBe(first.size);
   });
 });

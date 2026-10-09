@@ -1,5 +1,6 @@
 import type { Game, MarkOutcome, SightingOutcome, Taxon } from "../game";
 import { glyph, ICON_CAMERA, ICON_CLOSE } from "./icons";
+import { factCard } from "./fact-card";
 import { esc, looksLike, messageOf, namedTaxon, secondLine, taxonName } from "./text";
 
 /** Longest side of a stored Sighting photo: plenty for a Square and the detail panel, small to keep. */
@@ -56,7 +57,8 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
 
   function show(html: string) {
     body.innerHTML = html;
-    body.querySelector<HTMLElement>("button")?.focus();
+    // Without scrolling, so the answer stays in view above any fact card.
+    body.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
   }
 
   async function startCamera() {
@@ -148,6 +150,7 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
       case "already-marked":
         return show(`<h3>${esc(nameOf(outcome.index))}, again</h3>
           <p class="hint">You've already marked this Square, so your Card stays as it is.</p>
+          ${factCard(outcome.taxon, game.factFor(outcome.taxon))}
           <div class="actions">${done}${again}</div>`);
       case "not-on-card": {
         const filledBy = outcome.wildcardFilledBy;
@@ -156,6 +159,7 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
           : "";
         return show(`<h3>Not on your Card</h3>
           <p class="hint">This looks like ${namedTaxon(outcome.taxon)}.${wildcardNote}</p>
+          ${factCard(outcome.taxon, game.factFor(outcome.taxon))}
           <div class="actions">${done}${again}</div>`);
       }
       case "unsure":
