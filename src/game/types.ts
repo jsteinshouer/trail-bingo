@@ -103,7 +103,39 @@ export type MarkedSquare = Square & {
   mark?: Mark;
   /** What the Sighting that marked it looked like: the likely species on a broad animal Square, what filled the Wildcard. */
   found?: Taxon;
+  /** The player's Sighting photo. */
+  photo?: Blob;
 };
+
+/** What a Sighting adds to the Square it marks. */
+export interface SightingDetails {
+  /** The taxon it looked like. */
+  found?: Taxon;
+  /** The player's photo. */
+  photo?: Blob;
+}
+
+/** The play on a Card, Square by Square. */
+export interface SavedProgress {
+  marks: (Mark | null)[];
+  found: (Taxon | null)[];
+  photos: (Blob | null)[];
+}
+
+/** Everything a restarted app needs to carry on: the Card, its label vectors and the play so far. */
+export interface SavedGame {
+  card: Card;
+  vectors: Float32Array[];
+  progress: SavedProgress;
+}
+
+/** Where the active Card is kept on the phone. */
+export interface Store {
+  load(): Promise<SavedGame | null>;
+  /** Saves a newly built Card, with no progress yet, in place of the last one. */
+  saveCard(card: Card, vectors: Float32Array[]): Promise<void>;
+  saveProgress(progress: SavedProgress): Promise<void>;
+}
 
 export interface CardState {
   place: Place;

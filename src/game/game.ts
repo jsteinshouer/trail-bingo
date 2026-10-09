@@ -8,9 +8,12 @@ import type {
   FactSource,
   Mark,
   MarkOutcome,
+  SavedProgress,
+  SightingDetails,
   SightingOutcome,
   SpeciesSource,
   Square,
+  Store,
   Taxon,
 } from "./types";
 
@@ -28,14 +31,12 @@ function lines(size: CardSize): number[][] {
   ];
 }
 
-/**
- * Where the game's adapters plug in. The store joins this interface in
- * ticket 09.
- */
+/** Where the game's adapters plug in. */
 export interface GameAdapters {
   encoder: Encoder;
   species: SpeciesSource;
   facts: FactSource;
+  store: Store;
   /** Today, for the season window. */
   now?: () => Date;
   /** For picking Squares and the 4×4 Wildcard; seeded in tests. */
@@ -55,10 +56,13 @@ export interface Game {
   /**
    * Builds a Card from species seen near the place this time of year, with
    * every local species' label vector ready, and makes it the active Card.
-   * The current Card stays if the build fails. Throws NotEnoughSpeciesError
+   * The new Card is saved on the phone before it replaces the current one,
+   * which stays if the build or the save fails. Throws NotEnoughSpeciesError
    * when even the widest search area can't fill it.
    */
   buildCard(request: CardRequest, onProgress?: (progress: BuildProgress) => void): Promise<CardState>;
+  /** Brings back the Card saved on the phone, as it was. Resolves to whether there was one. */
+  restore(): Promise<boolean>;
   /** Whether there's an active Card, which a new one would replace. */
   hasCard(): boolean;
   /** What there is to learn about a local species on the active Card. */
@@ -68,19 +72,23 @@ export interface Game {
    * most observed local species for a broad animal Square. The Wildcard has none.
    */
   clue(index: number): { taxon: Taxon; fact?: Fact } | null;
-  /** Makes this the active Card, with no Squares marked. */
+  /** Makes this the active Card, with no Squares marked. Not saved: the player's Cards are built with `buildCard`. */
   loadCard(card: Card): void;
   /**
-   * Marks a Square, with what the Sighting looked like when there is one (a
-   * guess's taxon). An already-marked Square keeps its first mark.
+   * Marks a Square, with what the Sighting added: the taxon it looked like (a
+   * guess's taxon) and the player's photo. An already-marked Square keeps its
+   * first mark. The mark is saved on the phone; `saved()` says how that went.
    */
-  mark(index: number, mark: Mark, found?: Taxon): MarkOutcome;
+  mark(index: number, mark: Mark, sighting?: SightingDetails): MarkOutcome;
   /**
    * Checks a Sighting, given its photo's vector, against the active Card.
-   * A sure match to an open Square marks it as Verified, and a sure match to
-   * a local species off the Card fills the open Wildcard; nothing else changes the Card.
+   * A sure match to an open Square marks it as Verified, with the photo, and a
+   * sure match to a local species off the Card fills the open Wildcard;
+   * nothing else changes the Card.
    */
-  sighting(photo: Float32Array): Promise<SightingOutcome>;
+  sighting(vector: Float32Array, photo?: Blob): Promise<SightingOutcome>;
+  /** Settles when the marks so far are saved on the phone, or rejects if the last save failed. */
+  saved(): Promise<void>;
   /** The active Card and its marks. */
   state(): CardState;
 }
@@ -95,11 +103,15 @@ function exampleOf(card: Card, square: Exclude<Square, { kind: "wildcard" }>): T
     : card.localSpecies.find((t) => t.group === square.group);
 }
 
-export function createGame({ encoder, species, facts, now = () => new Date(), random = Math.random }: GameAdapters): Game {
+export function createGame({ encoder, species, facts, store, now = () => new Date(), random = Math.random }: GameAdapters): Game {
   let card: Card | null = null;
   let marks: (Mark | undefined)[] = [];
   /** What marked each broad animal Square and the Wildcard. */
   let found: (Taxon | undefined)[] = [];
+  /** The player's Sighting photos, by Square. */
+  let photos: (Blob | undefined)[] = [];
+  /** The latest save of the marks, one after another. */
+  let saving: Promise<void> = Promise.resolve();
   /** The Card's species and their label vectors. Encoding starts as soon as the Card loads. */
   let candidateVectors: Promise<{ list: Candidate[]; vectors: Float32Array[] }> | null = null;
 
@@ -168,7 +180,7 @@ export function createGame({ encoder, species, facts, now = () => new Date(), ra
       month,
       size,
       squares: squares.map((square, i) =>
-        marks[i] ? { ...square, mark: marks[i], ...(found[i] && { found: found[i] }) } : square,
+        marks[i] ? { ...square, mark: marks[i], ...(found[i] && { found: found[i] }), ...(photos[i] && { photo: photos[i] }) } : square,
       ),
       bingos: complete,
       bingoCount: complete.length,
@@ -176,14 +188,37 @@ export function createGame({ encoder, species, facts, now = () => new Date(), ra
     };
   }
 
-  function mark(index: number, which: Mark, what?: Taxon): MarkOutcome {
+  /** Makes `next` the active Card, with its label vectors and any play saved for it. */
+  function activate(next: Card, vectors: { list: Candidate[]; vectors: Float32Array[] }, progress?: SavedProgress) {
+    card = next;
+    marks = next.squares.map((_, i) => progress?.marks[i] ?? undefined);
+    found = next.squares.map((_, i) => progress?.found[i] ?? undefined);
+    photos = next.squares.map((_, i) => progress?.photos[i] ?? undefined);
+    candidateVectors = Promise.resolve(vectors);
+  }
+
+  /** Saves the marks after any save already under way, so they land in order. */
+  function saveProgress() {
+    const progress: SavedProgress = {
+      marks: marks.map((m) => m ?? null),
+      found: found.map((f) => f ?? null),
+      photos: photos.map((p) => p ?? null),
+    };
+    saving = saving.catch(() => {}).then(() => store.saveProgress(progress));
+    // Nobody may ask how it went; `saved()` reports a failure to whoever does.
+    saving.catch(() => {});
+  }
+
+  function mark(index: number, which: Mark, sighting: SightingDetails = {}): MarkOutcome {
     if (!Number.isInteger(index) || index < 0 || index >= active().squares.length) {
       throw new Error(`Square ${index} isn't on this Card`);
     }
     if (marks[index]) return { newBingos: [], blackout: false };
     marks[index] = which;
     // A species Square already names what was found.
-    if (what && active().squares[index].kind !== "species") found[index] = what;
+    if (sighting.found && active().squares[index].kind !== "species") found[index] = sighting.found;
+    if (sighting.photo) photos[index] = sighting.photo;
+    saveProgress();
     return { newBingos: bingos().filter((line) => line.includes(index)), blackout: blackout() };
   }
 
@@ -203,13 +238,23 @@ export function createGame({ encoder, species, facts, now = () => new Date(), ra
       if (!built) throw new NotEnoughSpeciesError(request.size);
       built.facts = await fetchFacts(built, onProgress);
 
-      // Everything the photo check needs is ready before the Card replaces the current one.
+      // Everything the photo check needs is ready, and saved, before the Card replaces the current one.
       const vectors = await encodeLabels(built, onProgress);
-      card = built;
-      marks = built.squares.map(() => undefined);
-      found = built.squares.map(() => undefined);
-      candidateVectors = Promise.resolve(vectors);
+      await saving.catch(() => {});
+      await store.saveCard(built, vectors.vectors);
+      activate(built, vectors);
+      saving = Promise.resolve();
       return state();
+    },
+
+    async restore() {
+      const saved = await store.load();
+      if (!saved) return false;
+      const list = candidates(saved.card);
+      // Vectors that don't fit the Card are encoded again on the first Sighting.
+      activate(saved.card, { list, vectors: saved.vectors }, saved.progress);
+      if (saved.vectors.length !== list.length) candidateVectors = encodeCandidates(saved.card);
+      return true;
     },
 
     hasCard: () => card !== null,
@@ -231,16 +276,19 @@ export function createGame({ encoder, species, facts, now = () => new Date(), ra
       card = next;
       marks = next.squares.map(() => undefined);
       found = next.squares.map(() => undefined);
+      photos = next.squares.map(() => undefined);
       candidateVectors = encodeCandidates(next);
     },
 
     mark,
 
-    async sighting(photo) {
+    saved: () => saving,
+
+    async sighting(vector, photo) {
       const cardAtStart = active();
       const { list, vectors } = await (candidateVectors ??= encodeCandidates(cardAtStart));
       if (card !== cardAtStart) throw new Error("The Card changed during the photo check");
-      const ranked = rank(photo, list, vectors);
+      const ranked = rank(vector, list, vectors);
       const [best, next] = ranked;
       // With nothing else to compare against, a lone candidate is a sure match.
       if (best.score - (next?.score ?? -1) >= VERIFIED_GAP) {
@@ -249,11 +297,11 @@ export function createGame({ encoder, species, facts, now = () => new Date(), ra
           // Anything living the photo check is sure of counts for the Wildcard.
           const wild = cardAtStart.squares.findIndex((s) => s.kind === "wildcard");
           if (wild < 0) return { kind: "not-on-card", taxon };
-          if (!marks[wild]) return { kind: "verified", index: wild, taxon, mark: mark(wild, "verified", taxon) };
+          if (!marks[wild]) return { kind: "verified", index: wild, taxon, mark: mark(wild, "verified", { found: taxon, photo }) };
           return { kind: "not-on-card", taxon, wildcardFilledBy: found[wild] };
         }
         if (marks[square]) return { kind: "already-marked", index: square, taxon };
-        return { kind: "verified", index: square, taxon, mark: mark(square, "verified", taxon) };
+        return { kind: "verified", index: square, taxon, mark: mark(square, "verified", { found: taxon, photo }) };
       }
       const open = ranked.flatMap(({ square, taxon }) => (square === null || marks[square] ? [] : [{ index: square, taxon }]));
       return { kind: "unsure", guesses: open.slice(0, 3) };

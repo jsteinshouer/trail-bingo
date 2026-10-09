@@ -5,6 +5,7 @@ import { browserModelStore } from "./model";
 import { createInatFactSource } from "./facts";
 import { createPlaceSearch, currentPosition } from "./places";
 import { createInatSpeciesSource } from "./species";
+import { createIndexedDbStore } from "./store";
 import { mountBuilder } from "./ui/builder";
 import { mountCardScreen } from "./ui/card-screen";
 import { mountSetupScreen } from "./ui/setup-screen";
@@ -16,14 +17,23 @@ const web = { fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(inp
 function startGame() {
   app.setAttribute("aria-label", "Trail Bingo Card");
   const encoder = createBioclipEncoder();
-  const game = createGame({ encoder, species: createInatSpeciesSource(web), facts: createInatFactSource(web) });
+  const game = createGame({
+    encoder,
+    species: createInatSpeciesSource(web),
+    facts: createInatFactSource(web),
+    store: createIndexedDbStore(),
+  });
   const screen = mountCardScreen(app, game, encoder, { onNewCard: () => builder.open() });
   const builder = mountBuilder(app, game, {
     locate: currentPosition,
     search: createPlaceSearch(web).search,
     onBuilt: () => screen.render(),
   });
-  builder.open();
+  // A Card saved on the phone comes back as it was; without one, it's time to build one.
+  game.restore().then(
+    (restored) => (restored ? screen.render() : builder.open()),
+    () => builder.open(),
+  );
 }
 
 // The first launch downloads the model; later launches go straight to the game.
