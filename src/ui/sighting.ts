@@ -57,7 +57,8 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
 
   function show(html: string) {
     body.innerHTML = html;
-    body.querySelector<HTMLElement>("button")?.focus();
+    // Without scrolling, so the answer stays in view above any fact card.
+    body.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
   }
 
   async function startCamera() {

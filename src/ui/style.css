@@ -282,6 +282,8 @@ button { font: inherit; color: inherit; }
 .status small { display: block; font: 400 14px/1.3 var(--face-text); letter-spacing: 0; opacity: .9; }
 
 .photo { position: relative; margin-top: 16px; aspect-ratio: 1 / 1; border: 1.5px solid var(--ink); overflow: hidden; }
+/* Photos fill their frames: the player's Sighting, a clue, a fact card's pair */
+.photo img, .clue img, .tile-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
 /* Clue: a map-tint panel that develops a reference photo when asked */
 .clue {
@@ -299,19 +301,21 @@ button { font: inherit; color: inherit; }
   font: 700 19px/1 var(--face-label); letter-spacing: .03em;
 }
 .clue-btn:hover { background: #f1f6ec; }
-.clue img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: develop .7s var(--ease-out) both; }
+.clue img { animation: develop .7s var(--ease-out) both; }
 .credit { margin: 6px 0 0; font: 400 12.5px/1.35 var(--face-text); color: var(--ink-soft); }
 .credit a { color: inherit; }
 
 /* Fact card: a reference photo, a short summary, and its sources */
 .fact { margin-top: 14px; }
+.fact .status { margin-top: 12px; }
+.fact .warning { margin-top: 12px; margin-bottom: 0; }
 .tiles { margin: 0; display: grid; gap: 8px; }
 .tiles.pair { grid-template-columns: 1fr 1fr; }
 .tiles .credit { grid-column: 1 / -1; margin-top: 0; }
 .tile span { display: block; margin-top: 4px; font: 600 12px/1 var(--face-label); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
 .tile-photo { position: relative; aspect-ratio: 4 / 3; border: 1.5px solid var(--ink); overflow: hidden; background: var(--wood); }
 .tiles.pair .tile-photo { aspect-ratio: 1 / 1; }
-.tile-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
 .fact .summary { margin: 12px 0 0; font: 400 17px/1.5 var(--face-text); color: var(--ink); max-width: 42ch; }
 .fact .hint { margin-top: 12px; }
 /* Never eat it: printed in contour brown on its own band, ahead of everything else */
@@ -321,7 +325,6 @@ button { font: inherit; color: inherit; }
   font: 400 15px/1.45 var(--face-text); color: var(--ink);
 }
 .warning b { display: block; font: 700 19px/1.1 var(--face-label); letter-spacing: .02em; color: var(--contour-ink); text-transform: uppercase; margin-bottom: 2px; }
-.photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
 /* ── Take a Sighting: a printed purple band at the thumb ──────── */
 .sighting {

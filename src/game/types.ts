@@ -64,7 +64,7 @@ export interface Fact {
   /** Two or three sentences, plain text. */
   summary?: string;
   /** Where the summary is from, to credit it. */
-  summarySource?: { name: string; url: string };
+  summarySource?: { name: string; url?: string };
   /** A reference photo of the taxon, and its credit. */
   photo?: { image: Blob; credit: string };
 }

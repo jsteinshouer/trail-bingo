@@ -10,6 +10,7 @@ import type {
   MarkOutcome,
   SightingOutcome,
   SpeciesSource,
+  Square,
   Taxon,
 } from "./types";
 
@@ -84,6 +85,16 @@ export interface Game {
   state(): CardState;
 }
 
+/**
+ * What a Square looks like: its own species, or for a broad animal Square the
+ * most observed local species in its group (the local list is most observed first).
+ */
+function exampleOf(card: Card, square: Exclude<Square, { kind: "wildcard" }>): Taxon | undefined {
+  return square.kind === "species"
+    ? (card.localSpecies.find((t) => t.scientificName === square.scientificName) ?? square)
+    : card.localSpecies.find((t) => t.group === square.group);
+}
+
 export function createGame({ encoder, species, facts, now = () => new Date(), random = Math.random }: GameAdapters): Game {
   let card: Card | null = null;
   let marks: (Mark | undefined)[] = [];
@@ -128,25 +139,25 @@ export function createGame({ encoder, species, facts, now = () => new Date(), ra
   async function fetchFacts(forCard: Card, onProgress?: (progress: BuildProgress) => void) {
     const examples = new Set(
       forCard.squares.flatMap((square) => {
-        if (square.kind === "species") return [square.scientificName];
-        if (square.kind === "animal") return [forCard.localSpecies.find((t) => t.group === square.group)?.scientificName ?? ""];
-        return [];
+        if (square.kind === "wildcard") return [];
+        const example = exampleOf(forCard, square);
+        return example ? [example.scientificName] : [];
       }),
     );
     const clues = forCard.localSpecies.filter((t) => examples.has(t.scientificName));
     const rest = forCard.localSpecies.filter((t) => !examples.has(t.scientificName));
     const total = forCard.localSpecies.length;
     onProgress?.({ step: "facts", done: 0, total });
-    const big = await facts.factsFor(clues, {
+    const clueFacts = await facts.factsFor(clues, {
       photoSize: "medium",
       onProgress: (done) => onProgress?.({ step: "facts", done, total }),
     });
-    const small = await facts.factsFor(rest, {
+    const restFacts = await facts.factsFor(rest, {
       photoSize: "small",
       onProgress: (done) => onProgress?.({ step: "facts", done: clues.length + done, total }),
     });
     onProgress?.({ step: "facts", done: total, total });
-    return Object.fromEntries([...big, ...small]);
+    return Object.fromEntries([...clueFacts, ...restFacts]);
   }
 
   function state(): CardState {
@@ -207,11 +218,9 @@ export function createGame({ encoder, species, facts, now = () => new Date(), ra
 
     clue(index) {
       const square = active().squares[index];
-      const facts = active().facts ?? {};
       if (square.kind === "wildcard") return null;
-      const taxon =
-        square.kind === "species" ? square : active().localSpecies.find((t) => t.group === square.group);
-      return taxon ? { taxon, fact: facts[taxon.scientificName] } : null;
+      const taxon = exampleOf(active(), square);
+      return taxon ? { taxon, fact: active().facts?.[taxon.scientificName] } : null;
     },
 
     loadCard(next) {

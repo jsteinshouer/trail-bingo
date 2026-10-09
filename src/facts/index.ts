@@ -7,7 +7,7 @@ const BATCH = 30;
 /** Photos downloading at once. */
 const PARALLEL_PHOTOS = 6;
 /** A fact card is short: the phone goes back in the pocket. */
-const SENTENCES = 3;
+const SUMMARY_SENTENCES = 3;
 
 interface InatTaxon {
   id: number;
@@ -30,11 +30,37 @@ function plainText(html: string): string {
     .trim();
 }
 
+/** Words that end in a full stop without ending a sentence. */
+const ABBREVIATIONS = new Set(["st", "mt", "dr", "mr", "mrs", "ms", "jr", "sr", "vs", "etc", "ca", "approx", "sp", "spp", "var", "subsp", "no"]);
+
+/**
+ * The text's whole sentences. A sentence ends at ".", "!" or "?" before a
+ * capitalised word or the end of the text, but not after an initial ("Q. alba"),
+ * a dotted abbreviation ("U.S.", "e.g.") or a common short form ("St."). Text
+ * after the last sentence end is a fragment and is left out.
+ */
+function sentencesOf(text: string): string[] {
+  const sentences: string[] = [];
+  let start = 0;
+  for (const end of text.matchAll(/[.!?…]+["'”’)\]]*(?=\s|$)/g)) {
+    const after = end.index + end[0].length;
+    const next = text.slice(after).trimStart();
+    const word = text.slice(start, end.index).split(/\s+/).pop()!.replace(/^["'“‘(]+/, "");
+    const abbreviated =
+      end[0] === "." && (/^[A-Z]$/.test(word) || word.includes(".") || ABBREVIATIONS.has(word.toLowerCase()));
+    if (next === "" || (/^["'“‘(]?[A-Z0-9]/.test(next) && !abbreviated)) {
+      sentences.push(text.slice(start, after).trim());
+      start = after;
+    }
+  }
+  return sentences;
+}
+
 /** The first few whole sentences. iNaturalist cuts long summaries off with "...", and a cut-off sentence is dropped. */
 function shortSummary(text: string): string {
-  const sentences = text.match(/[^.!?…]+(?:[.!?…]+|$)/g)?.map((s) => s.trim()) ?? [];
+  const sentences = sentencesOf(text);
   if (/(\.\.\.|…)$/.test(text)) sentences.pop();
-  return sentences.slice(0, SENTENCES).join(" ");
+  return sentences.slice(0, SUMMARY_SENTENCES).join(" ");
 }
 
 /** Runs `task` over `items`, a few at a time. */
@@ -88,7 +114,10 @@ export function createInatFactSource({ fetch }: { fetch: typeof globalThis.fetch
         const fact: Fact = {};
         if (inat.wikipedia_summary) {
           fact.summary = shortSummary(plainText(inat.wikipedia_summary));
-          if (inat.wikipedia_url) fact.summarySource = { name: "Wikipedia", url: inat.wikipedia_url.replace(/ /g, "_") };
+          // iNaturalist's summaries are Wikipedia's, so they're credited to it, with a link when there is one.
+          fact.summarySource = inat.wikipedia_url
+            ? { name: "Wikipedia", url: inat.wikipedia_url.replace(/ /g, "_") }
+            : { name: "Wikipedia" };
         }
         if (inat.default_photo) {
           const image = await download(inat.default_photo.url.replace(/\/square\./, `/${photoSize satisfies PhotoSize}.`));

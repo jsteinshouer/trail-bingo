@@ -17,7 +17,18 @@ const SHAGGY_MANE: Taxon = { group: "fungus", name: "Shaggy Mane", scientificNam
 const NO_SUMMARY: Taxon = { group: "insect", name: "Cryptoblabes angustipennis", scientificName: "Cryptoblabes angustipennis", taxonId: 127174 };
 const NO_PHOTO: Taxon = { group: "butterfly-or-moth", name: "Compassberg skolly", scientificName: "Thestor compassbergae", taxonId: 114077 };
 
-const RECORDED = [...taxa.results, ...taxaMissing.results];
+/** Not recorded: a summary with the abbreviations and decimals Wikipedia leads often have, and no Wikipedia link. */
+const TRICKY = {
+  id: 1,
+  wikipedia_url: null,
+  default_photo: null,
+  wikipedia_summary:
+    "<b>White oak</b> (<i>Q. alba</i>) grows across the eastern U.S. and Canada, up to 30.5 m tall. Its acorns are eaten by deer, " +
+    "e.g. white-tailed deer. It is the state tree of Illinois. It lives for centuries.",
+};
+const WHITE_OAK: Taxon = { group: "tree", name: "White oak", scientificName: "Quercus alba", taxonId: 1 };
+
+const RECORDED = [...taxa.results, ...taxaMissing.results, TRICKY];
 
 function fakeInat(options: { taxaStatus?: number; brokenPhotos?: boolean; unreachable?: boolean } = {}) {
   const requests: URL[] = [];
@@ -59,6 +70,29 @@ describe("iNaturalist fact source", () => {
         "along gravel roads and waste areas. The young fruit bodies first appear as white cylinders emerging from the ground, " +
         "then the bell-shaped caps open out. The caps are white, and covered with scales—this is the origin of the common names of the fungus.",
     );
+  });
+
+  it("splits sentences only at sentence ends, not at abbreviations or decimals", async () => {
+    const facts = await createInatFactSource(fakeInat()).factsFor([WHITE_OAK], { photoSize: "medium" });
+
+    expect(facts.get("Quercus alba")?.summary).toBe(
+      "White oak (Q. alba) grows across the eastern U.S. and Canada, up to 30.5 m tall. " +
+        "Its acorns are eaten by deer, e.g. white-tailed deer. It is the state tree of Illinois.",
+    );
+  });
+
+  it("credits Wikipedia for a summary even without a link to it", async () => {
+    const facts = await createInatFactSource(fakeInat()).factsFor([WHITE_OAK], { photoSize: "medium" });
+
+    expect(facts.get("Quercus alba")?.summarySource).toEqual({ name: "Wikipedia" });
+  });
+
+  it("has no fact for a taxon iNaturalist doesn't return", async () => {
+    const gone: Taxon = { ...INDIANGRASS, scientificName: "Gone", taxonId: 999_999 };
+    const facts = await createInatFactSource(fakeInat()).factsFor([gone, FOX_SQUIRREL], { photoSize: "small" });
+
+    expect(facts.has("Gone")).toBe(false);
+    expect(facts.has("Sciurus niger")).toBe(true);
   });
 
   it("downloads the reference photo, with its credit, so it works offline", async () => {
