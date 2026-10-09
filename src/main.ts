@@ -2,7 +2,7 @@ import "./ui/style.css";
 import { createGame } from "./game";
 import { createBioclipEncoder } from "./encoder";
 import { browserModelStore } from "./model";
-import { currentPosition } from "./places";
+import { createPlaceSearch, currentPosition } from "./places";
 import { createInatSpeciesSource } from "./species";
 import { mountBuilder } from "./ui/builder";
 import { mountCardScreen } from "./ui/card-screen";
@@ -19,6 +19,7 @@ function startGame() {
   const screen = mountCardScreen(app, game, encoder, { onNewCard: () => builder.open() });
   const builder = mountBuilder(app, game, {
     locate: currentPosition,
+    search: createPlaceSearch(web).search,
     onBuilt: () => screen.render(),
   });
   builder.open();

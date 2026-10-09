@@ -1,4 +1,5 @@
-import { NotEnoughSpeciesError, type BuildProgress, type CardGroup, type CardSize, type Game } from "../game";
+import { NotEnoughSpeciesError, type BuildProgress, type CardGroup, type CardSize, type Game, type Place } from "../game";
+import type { FoundPlace } from "../places";
 import { ICON_CLOSE, ICON_LOCATE, kindGlyph } from "./icons";
 import { esc, messageOf, monthName } from "./text";
 
@@ -22,6 +23,8 @@ const degrees = (value: number, positive: string, negative: string) =>
 export interface BuilderOptions {
   /** The device's location. */
   locate(): Promise<{ lat: number; lng: number }>;
+  /** Trails, parks and towns matching a name, best first. */
+  search(name: string): Promise<FoundPlace[]>;
   /** The new Card is the active one and ready offline. */
   onBuilt(): void;
 }
@@ -45,6 +48,14 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
     <form class="builder-body">
       <fieldset class="where">
         <legend>Where</legend>
+        <div class="search-row">
+          <input type="search" name="q" placeholder="A trail, park or town" aria-label="Search for a trail, park or town"
+            enterkeyhint="search" autocomplete="off" autocapitalize="words">
+          <button class="btn search" type="submit">Search</button>
+        </div>
+        <p class="search-note" aria-live="polite"></p>
+        <ul class="places" aria-label="Places found" hidden></ul>
+        <p class="or" aria-hidden="true">or</p>
         <button class="btn locate" type="button">${ICON_LOCATE}Use my location</button>
         <p class="place-line" aria-live="polite"></p>
       </fieldset>
@@ -70,13 +81,18 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
   const $ = <T extends Element = HTMLElement>(selector: string) => overlay.querySelector<T>(selector)! as T;
   const form = $<HTMLFormElement>("form");
   const locate = $<HTMLButtonElement>(".locate");
+  const query = $<HTMLInputElement>('input[name="q"]');
+  const searchButton = $<HTMLButtonElement>(".search");
+  const searchNote = $(".search-note");
+  const found = $<HTMLUListElement>(".places");
   const placeLine = $(".place-line");
   const status = $(".build-status");
   const build = $<HTMLButtonElement>("[data-build]");
   const buildLabel = $("[data-build] .label");
   const closeButton = $(".close");
 
-  let place: { lat: number; lng: number } | null = null;
+  let place: Omit<Place, "radiusKm"> | null = null;
+  let results: FoundPlace[] = [];
   let building = false;
 
   const size = () => Number(new FormData(form).get("size")) as CardSize;
@@ -96,16 +112,66 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
     if (html) status.scrollIntoView?.({ block: "nearest" });
   }
 
+  /** The chosen place, under the search. */
+  function showPlace() {
+    if (!place) return void (placeLine.textContent = "");
+    placeLine.innerHTML = place.name
+      ? `<b>${esc(place.name)}</b>${place.region ? `, ${esc(place.region)}` : ""}`
+      : `<b>Your location</b> · ${degrees(place.lat, "N", "S")}, ${degrees(place.lng, "E", "W")}`;
+  }
+
+  /** Makes this the Card's place, ready to build. */
+  function choose(next: Omit<Place, "radiusKm">) {
+    place = next;
+    showPlace();
+    clearResults();
+    showStatus("");
+    refresh();
+    build.focus();
+  }
+
+  function clearResults() {
+    results = [];
+    found.hidden = true;
+    found.innerHTML = "";
+    searchNote.textContent = "";
+  }
+
+  async function search() {
+    const name = query.value.trim();
+    if (!name) return query.focus();
+    clearResults();
+    searchButton.disabled = true;
+    searchNote.textContent = "Searching…";
+    try {
+      results = await options.search(name);
+      searchNote.textContent = results.length
+        ? ""
+        : `No place called “${name}” was found. Try a nearby town or park, or check the spelling.`;
+      found.innerHTML = results
+        .map(
+          (p, i) => `<li><button class="found" type="button" data-place="${i}">
+            <span class="name">${esc(p.name)}</span><span class="second">${esc(p.detail)}</span></button></li>`,
+        )
+        .join("");
+      found.hidden = !results.length;
+      found.querySelector<HTMLElement>("button")?.focus();
+    } catch (error) {
+      searchNote.innerHTML = `<span class="problem">${esc(messageOf(error))} You can still use your location.</span>`;
+    } finally {
+      searchButton.disabled = false;
+    }
+  }
+
   async function findMe() {
     locate.disabled = true;
+    clearResults();
     placeLine.textContent = "Finding where you are…";
     try {
-      place = await options.locate();
-      placeLine.innerHTML = `<b>Your location</b> · ${degrees(place.lat, "N", "S")}, ${degrees(place.lng, "E", "W")}`;
-      showStatus("");
+      choose(await options.locate());
     } catch (error) {
-      place = null;
-      placeLine.textContent = "";
+      // A place chosen from the search before still stands.
+      showPlace();
       showStatus(`<p class="problem">${esc(messageOf(error))}</p>`);
     } finally {
       locate.disabled = false;
@@ -168,7 +234,17 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
     showStatus("");
     refresh();
   });
-  form.addEventListener("submit", (event) => event.preventDefault());
+  // The only submit is the search: Enter in the search box, or its button.
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    search();
+  });
+  found.addEventListener("click", (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>("button[data-place]");
+    if (!button) return;
+    const { name, region, lat, lng } = results[Number(button.dataset.place)];
+    choose({ name, region, lat, lng });
+  });
   build.addEventListener("click", () => (game.hasCard() ? confirmReplace() : buildCard()));
   status.addEventListener("click", (event) => {
     const button = (event.target as Element).closest<HTMLButtonElement>("button");
