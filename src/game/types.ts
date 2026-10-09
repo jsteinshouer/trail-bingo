@@ -73,7 +73,11 @@ export interface Card {
   localSpecies: Taxon[];
 }
 
-export type MarkedSquare = Square & { mark?: Mark };
+export type MarkedSquare = Square & {
+  mark?: Mark;
+  /** What the Sighting that marked it looked like: the likely species on a broad animal Square, what filled the Wildcard. */
+  found?: Taxon;
+};
 
 export interface CardState {
   place: Place;
@@ -97,11 +101,17 @@ export interface MarkOutcome {
 
 /** What a Sighting turned out to be. */
 export type SightingOutcome =
-  /** The photo check was sure, and marked the Square as Verified. */
+  /** The photo check was sure, and marked the Square as Verified: a Square on the Card, or the Wildcard for a species that isn't. */
   | { kind: "verified"; index: number; taxon: Taxon; mark: MarkOutcome }
   /** The photo check was sure, but the Square was already marked. Nothing changed. */
   | { kind: "already-marked"; index: number; taxon: Taxon }
-  /** The photo check wasn't sure. Its top open Squares, best first, for the player to pick from. */
-  | { kind: "unsure"; guesses: number[] }
-  /** The photo check was sure it's a local species that isn't on the Card. */
-  | { kind: "not-on-card"; taxon: Taxon };
+  /**
+   * The photo check wasn't sure. Its top open Squares, best first, for the
+   * player to pick from, each with the species it looks like there.
+   */
+  | { kind: "unsure"; guesses: { index: number; taxon: Taxon }[] }
+  /**
+   * The photo check was sure it's a local species that isn't on the Card, and
+   * the Wildcard it would have filled is already filled. Nothing changed.
+   */
+  | { kind: "not-on-card"; taxon: Taxon; wildcard?: { index: number; found?: Taxon } };
