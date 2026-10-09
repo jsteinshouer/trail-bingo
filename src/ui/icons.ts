@@ -46,3 +46,6 @@ export const ICON_IMPRINT =
 
 export const ICON_CAMERA =
   '<svg width="28" height="24" viewBox="0 0 28 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M2 7h6l2.5-4h7L20 7h6v15H2Z"/><circle cx="14" cy="14" r="4.6"/></svg>';
+
+export const ICON_DOWNLOAD =
+  '<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M13 3v13M7.5 10.5 13 16l5.5-5.5M4 18v4h18v-4"/></svg>';
