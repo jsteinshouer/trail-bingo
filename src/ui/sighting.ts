@@ -1,6 +1,6 @@
 import type { Game, MarkOutcome, SightingOutcome, Taxon } from "../game";
 import { glyph, ICON_CAMERA, ICON_CLOSE } from "./icons";
-import { esc, messageOf, secondLine } from "./text";
+import { esc, looksLike, messageOf, namedTaxon, secondLine, taxonName } from "./text";
 
 /** Longest side of a stored Sighting photo: plenty for a Square and the detail panel, small to keep. */
 const PHOTO_SIDE = 768;
@@ -51,6 +51,8 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
   /** The current Sighting's photo, until a Square takes it or it's thrown away. */
   let photo: string | null = null;
   let open = false;
+  /** The species each offered guess looks like, by Square, so a pick records it. */
+  let guessTaxa = new Map<number, Taxon>();
 
   function show(html: string) {
     body.innerHTML = html;
@@ -59,6 +61,7 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
 
   async function startCamera() {
     discardPhoto();
+    guessTaxa = new Map();
     still.hidden = true;
     checking.hidden = true;
     shutter.hidden = false;
@@ -146,20 +149,28 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
         return show(`<h3>${esc(nameOf(outcome.index))}, again</h3>
           <p class="hint">You've already marked this Square, so your Card stays as it is.</p>
           <div class="actions">${done}${again}</div>`);
-      case "not-on-card":
+      case "not-on-card": {
+        const filledBy = outcome.wildcardFilledBy;
+        const wildcardNote = filledBy
+          ? ` Your Wildcard is already filled with ${taxonName(filledBy)}, so your Card stays as it is.`
+          : "";
         return show(`<h3>Not on your Card</h3>
-          <p class="hint">This looks like ${namedTaxon(outcome.taxon)}.</p>
+          <p class="hint">This looks like ${namedTaxon(outcome.taxon)}.${wildcardNote}</p>
           <div class="actions">${done}${again}</div>`);
+      }
       case "unsure":
         return show(`<h3>Which one is it?</h3>
           <p class="hint">The photo check isn't sure. If it's one of these, pick it.</p>
           <ul class="guesses">${outcome.guesses
-            .map((index) => {
+            .map(({ index, taxon }) => {
               const square = squares[index];
               if (square.kind === "wildcard") return "";
+              guessTaxa.set(index, taxon);
+              // A broad animal guess says which animal it looks like.
+              const second = square.kind === "animal" ? looksLike(taxon) : esc(secondLine(square));
               return `<li><button class="guess" type="button" data-pick="${index}">
                 ${glyph(square)}<span class="name">${esc(square.name)}</span>
-                <span class="second">${esc(secondLine(square))}</span></button></li>`;
+                <span class="second">${second}</span></button></li>`;
             })
             .join("")}</ul>
           <div class="actions"><button class="btn" type="button" data-close>None of these</button>${again}</div>`);
@@ -187,7 +198,7 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
     if (!button) return;
     if (button.dataset.pick !== undefined) {
       const index = Number(button.dataset.pick);
-      markWith(index, game.mark(index, "confirmed"));
+      markWith(index, game.mark(index, "confirmed", guessTaxa.get(index)));
     } else if ("retry" in button.dataset) {
       startCamera();
     } else if ("close" in button.dataset) {
@@ -223,11 +234,6 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
   });
 
   return { open: openCamera };
-}
-
-/** A taxon's common name with its scientific name, or the scientific name alone when it has no common name. */
-function namedTaxon({ name, scientificName }: Taxon): string {
-  return name === scientificName ? `<i>${esc(name)}</i>` : `${esc(name)} (<i>${esc(scientificName)}</i>)`;
 }
 
 function cameraProblem(error: unknown): string {

@@ -340,13 +340,14 @@ describe("the photo check on a built Card", () => {
     expect(encoder.labels).toHaveLength(before);
   });
 
-  it("treats local species that aren't on the Card as decoys", async () => {
+  it("treats local species that aren't on the Card as decoys, which fill the Wildcard", async () => {
     const near = [...observed("tree", 30), ...observed("plant", 5)];
     const { game, encoder } = setup({ near });
-    await game.buildCard(request(3, ["tree"]));
+    const card = await game.buildCard(request(3, ["tree"]));
 
     const outcome = await game.sighting(photoOf(encoder, "plant sci 3"));
-    expect(outcome).toMatchObject({ kind: "not-on-card", taxon: { scientificName: "plant sci 3" } });
+    expect(outcome).toMatchObject({ kind: "verified", index: 4, taxon: { scientificName: "plant sci 3" } });
+    expect(card.squares[4].kind).toBe("wildcard");
   });
 
   it("fills a broad animal Square with the best-matching local animal's group", async () => {

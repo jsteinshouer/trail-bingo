@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGame, VERIFIED_GAP, type Card, type Encoder, type SpeciesSource, type Square, type Taxon } from "./index";
+import { createGame, VERIFIED_GAP, type Card, type Encoder, type SightingOutcome, type SpeciesSource, type Square, type Taxon } from "./index";
 
 /*
  * The fake encoder gives every label its own axis, so a photo's cosine with a
@@ -92,6 +92,14 @@ function playing(card: Card = CARD) {
 const SURE = VERIFIED_GAP + 0.005;
 const UNSURE = VERIFIED_GAP - 0.005;
 
+/** The Squares an unsure outcome offers, best first. */
+function guessed(outcome: SightingOutcome): number[] {
+  if (outcome.kind !== "unsure") throw new Error(`expected unsure, got ${outcome.kind}`);
+  return outcome.guesses.map((g) => g.index);
+}
+
+const WILDCARD = 4;
+
 describe("a Sighting the photo check is sure of", () => {
   it("marks the matching Square as Verified", async () => {
     const game = playing();
@@ -119,7 +127,7 @@ describe("a Sighting the photo check isn't sure of", () => {
     const outcome = await game.sighting(
       photo({ "Celtis occidentalis": 0.33, "Ulmus americana": 0.32, "Rhus glabra": 0.31, "Quercus macrocarpa": 0.3 }),
     );
-    expect(outcome).toEqual({ kind: "unsure", guesses: [1, 3, 6] });
+    expect(guessed(outcome)).toEqual([1, 3, 6]);
     expect(game.state().squares.some((s) => s.mark)).toBe(false);
   });
 
@@ -127,7 +135,8 @@ describe("a Sighting the photo check isn't sure of", () => {
     const game = playing();
     const outcome = await game.sighting(photo({ "Celtis occidentalis": 0.33, "Ulmus americana": 0.32 }));
     if (outcome.kind !== "unsure") throw new Error(`expected unsure, got ${outcome.kind}`);
-    game.mark(outcome.guesses[1], "confirmed");
+    const { index, taxon } = outcome.guesses[1];
+    game.mark(index, "confirmed", taxon);
     expect(game.state().squares[3].mark).toBe("confirmed");
     expect(game.state().squares.filter((s) => s.mark)).toHaveLength(1);
   });
@@ -138,7 +147,7 @@ describe("a Sighting the photo check isn't sure of", () => {
     const outcome = await game.sighting(
       photo({ "Celtis occidentalis": 0.33, "Ulmus americana": 0.325, "Rhus glabra": 0.32, "Quercus macrocarpa": 0.31 }),
     );
-    expect(outcome).toEqual({ kind: "unsure", guesses: [1, 6, 0] });
+    expect(guessed(outcome)).toEqual([1, 6, 0]);
   });
 
   it("offers only Card Squares, even when a species off the Card leads", async () => {
@@ -146,22 +155,57 @@ describe("a Sighting the photo check isn't sure of", () => {
     const outcome = await game.sighting(
       photo({ "Achillea millefolium": 0.34, "Rhus glabra": 0.33, "Quercus macrocarpa": 0.32, "Ulmus americana": 0.31 }),
     );
-    expect(outcome).toEqual({ kind: "unsure", guesses: [6, 0, 3] });
+    expect(guessed(outcome)).toEqual([6, 0, 3]);
+  });
+
+  it("offers each guess with the species it looks like, so a broad animal Square gets its likely species", async () => {
+    const game = playing();
+    const outcome = await game.sighting(photo({ "Sciurus niger": 0.33, "Turdus migratorius": 0.33 - UNSURE }));
+    if (outcome.kind !== "unsure") throw new Error(`expected unsure, got ${outcome.kind}`);
+
+    expect(outcome.guesses.slice(0, 2)).toEqual([
+      { index: 2, taxon: SQUIRREL },
+      { index: 5, taxon: ROBIN },
+    ]);
+    game.mark(2, "confirmed", outcome.guesses[0].taxon);
+    expect(game.state().squares[2]).toMatchObject({ mark: "confirmed", found: SQUIRREL });
   });
 });
 
-describe("a Sighting of a species that isn't on the Card", () => {
-  it("is reported as not on the Card and marks nothing", async () => {
+describe("a sure Sighting of a local species that isn't on the Card", () => {
+  it("fills the open Wildcard as Verified, remembering what filled it", async () => {
     const game = playing();
     const outcome = await game.sighting(photo({ "Achillea millefolium": 0.34, "Rhus glabra": 0.34 - SURE }));
-    expect(outcome).toEqual({ kind: "not-on-card", taxon: YARROW });
-    expect(game.state().squares.some((s) => s.mark)).toBe(false);
+
+    expect(outcome).toMatchObject({ kind: "verified", index: WILDCARD, taxon: YARROW });
+    expect(game.state().squares[WILDCARD]).toEqual({ kind: "wildcard", mark: "verified", found: YARROW });
+    expect(game.state().squares.filter((s) => s.mark)).toHaveLength(1);
   });
 
-  it("is reported for an animal whose group has no Square", async () => {
+  it("fills the Wildcard with an animal whose group has no Square", async () => {
     const game = playing();
     const outcome = await game.sighting(photo({ "Argiope aurantia": 0.3, "Sciurus niger": 0.3 - SURE }));
-    expect(outcome).toEqual({ kind: "not-on-card", taxon: SPIDER });
+
+    expect(outcome).toMatchObject({ kind: "verified", index: WILDCARD, taxon: SPIDER });
+  });
+
+  it("changes nothing once the Wildcard is filled, and says so", async () => {
+    const game = playing();
+    await game.sighting(photo({ "Achillea millefolium": 0.34, "Rhus glabra": 0.34 - SURE }));
+    const before = game.state();
+    const outcome = await game.sighting(photo({ "Argiope aurantia": 0.3, "Sciurus niger": 0.3 - SURE }));
+
+    expect(outcome).toEqual({ kind: "not-on-card", taxon: SPIDER, wildcardFilledBy: YARROW });
+    expect(game.state()).toEqual(before);
+  });
+
+  it("can complete a Bingo through the Wildcard", async () => {
+    const game = playing();
+    game.mark(3, "verified");
+    game.mark(5, "verified");
+    const outcome = await game.sighting(photo({ "Achillea millefolium": 0.34, "Rhus glabra": 0.34 - SURE }));
+
+    expect(outcome).toMatchObject({ kind: "verified", index: WILDCARD, mark: { newBingos: [[3, 4, 5]] } });
   });
 });
 
@@ -182,6 +226,13 @@ describe("a Sighting of an animal", () => {
     const outcome = await game.sighting(photo({ "Turdus migratorius": 0.31, "Celtis occidentalis": 0.31 - SURE }));
     expect(outcome).toMatchObject({ kind: "verified", index: 5, taxon: ROBIN });
     expect(game.state().squares[5].mark).toBe("verified");
+  });
+
+  it("names the likely species on the Square it fills", async () => {
+    const game = playing();
+    await game.sighting(photo({ "Sciurus niger": 0.31, "Celtis occidentalis": 0.31 - SURE }));
+
+    expect(game.state().squares[2]).toEqual({ kind: "animal", group: "mammal", name: "A mammal", mark: "verified", found: SQUIRREL });
   });
 
   it("is sure of the group when the close runner-up is in the same group", async () => {

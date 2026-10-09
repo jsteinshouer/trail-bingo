@@ -1,6 +1,6 @@
 import { generateCard, NotEnoughSpeciesError, SEARCH_RADII_KM, seasonMonths, type CardRequest } from "./card-builder";
 import { candidates, label, rank, VERIFIED_GAP, type Candidate, type Encoder } from "./photo-check";
-import type { Card, CardSize, CardState, Mark, MarkOutcome, SightingOutcome, SpeciesSource } from "./types";
+import type { Card, CardSize, CardState, Mark, MarkOutcome, SightingOutcome, SpeciesSource, Taxon } from "./types";
 
 /** Labels per encoder call while building a Card, so progress can be shown between calls. */
 const LABEL_BATCH = 32;
@@ -48,11 +48,15 @@ export interface Game {
   hasCard(): boolean;
   /** Makes this the active Card, with no Squares marked. */
   loadCard(card: Card): void;
-  /** Marks a Square. An already-marked Square keeps its first mark. */
-  mark(index: number, mark: Mark): MarkOutcome;
+  /**
+   * Marks a Square, with what the Sighting looked like when there is one (a
+   * guess's taxon). An already-marked Square keeps its first mark.
+   */
+  mark(index: number, mark: Mark, found?: Taxon): MarkOutcome;
   /**
    * Checks a Sighting, given its photo's vector, against the active Card.
-   * A sure match to an open Square marks it as Verified; nothing else changes the Card.
+   * A sure match to an open Square marks it as Verified, and a sure match to
+   * a local species off the Card fills the open Wildcard; nothing else changes the Card.
    */
   sighting(photo: Float32Array): Promise<SightingOutcome>;
   /** The active Card and its marks. */
@@ -62,6 +66,8 @@ export interface Game {
 export function createGame({ encoder, species, now = () => new Date(), random = Math.random }: GameAdapters): Game {
   let card: Card | null = null;
   let marks: (Mark | undefined)[] = [];
+  /** What marked each broad animal Square and the Wildcard. */
+  let found: (Taxon | undefined)[] = [];
   /** The Card's species and their label vectors. Encoding starts as soon as the Card loads. */
   let candidateVectors: Promise<{ list: Candidate[]; vectors: Float32Array[] }> | null = null;
 
@@ -101,19 +107,23 @@ export function createGame({ encoder, species, now = () => new Date(), random = 
       place,
       month,
       size,
-      squares: squares.map((square, i) => (marks[i] ? { ...square, mark: marks[i] } : square)),
+      squares: squares.map((square, i) =>
+        marks[i] ? { ...square, mark: marks[i], ...(found[i] && { found: found[i] }) } : square,
+      ),
       bingos: complete,
       bingoCount: complete.length,
       blackout: blackout(),
     };
   }
 
-  function mark(index: number, which: Mark): MarkOutcome {
+  function mark(index: number, which: Mark, what?: Taxon): MarkOutcome {
     if (!Number.isInteger(index) || index < 0 || index >= active().squares.length) {
       throw new Error(`Square ${index} isn't on this Card`);
     }
     if (marks[index]) return { newBingos: [], blackout: false };
     marks[index] = which;
+    // A species Square already names what was found.
+    if (what && active().squares[index].kind !== "species") found[index] = what;
     return { newBingos: bingos().filter((line) => line.includes(index)), blackout: blackout() };
   }
 
@@ -136,6 +146,7 @@ export function createGame({ encoder, species, now = () => new Date(), random = 
       const vectors = await encodeLabels(built, onProgress);
       card = built;
       marks = built.squares.map(() => undefined);
+      found = built.squares.map(() => undefined);
       candidateVectors = Promise.resolve(vectors);
       return state();
     },
@@ -149,6 +160,7 @@ export function createGame({ encoder, species, now = () => new Date(), random = 
       }
       card = next;
       marks = next.squares.map(() => undefined);
+      found = next.squares.map(() => undefined);
       candidateVectors = encodeCandidates(next);
     },
 
@@ -163,11 +175,17 @@ export function createGame({ encoder, species, now = () => new Date(), random = 
       // With nothing else to compare against, a lone candidate is a sure match.
       if (best.score - (next?.score ?? -1) >= VERIFIED_GAP) {
         const { square, taxon } = best;
-        if (square === null) return { kind: "not-on-card", taxon };
+        if (square === null) {
+          // Anything living the photo check is sure of counts for the Wildcard.
+          const wild = cardAtStart.squares.findIndex((s) => s.kind === "wildcard");
+          if (wild < 0) return { kind: "not-on-card", taxon };
+          if (!marks[wild]) return { kind: "verified", index: wild, taxon, mark: mark(wild, "verified", taxon) };
+          return { kind: "not-on-card", taxon, wildcardFilledBy: found[wild] };
+        }
         if (marks[square]) return { kind: "already-marked", index: square, taxon };
-        return { kind: "verified", index: square, taxon, mark: mark(square, "verified") };
+        return { kind: "verified", index: square, taxon, mark: mark(square, "verified", taxon) };
       }
-      const open = ranked.flatMap(({ square }) => (square === null || marks[square] ? [] : [square]));
+      const open = ranked.flatMap(({ square, taxon }) => (square === null || marks[square] ? [] : [{ index: square, taxon }]));
       return { kind: "unsure", guesses: open.slice(0, 3) };
     },
 

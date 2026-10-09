@@ -1,4 +1,4 @@
-import type { AnimalGroup, Place, Square } from "../game";
+import type { AnimalGroup, MarkedSquare, Place, Taxon } from "../game";
 
 export const monthName = (month: number) => new Date(2000, month - 1).toLocaleString("en", { month: "long" });
 
@@ -24,6 +24,26 @@ const ANIMAL_ANY: Record<AnimalGroup, string> = {
   spider: "any spider",
 };
 
-/** A Square's second line: the scientific name, or what counts for a broad animal Square. */
-export const secondLine = (square: Exclude<Square, { kind: "wildcard" }>) =>
-  square.kind === "animal" ? ANIMAL_ANY[square.group] : square.scientificName;
+/**
+ * A Square's second line: the scientific name, or for a broad animal Square
+ * what counts until it's found, then the likely species.
+ */
+export function secondLine(square: Exclude<MarkedSquare, { kind: "wildcard" }>): string {
+  if (square.kind !== "animal") return square.scientificName;
+  return square.found ? `likely ${square.found.name}` : ANIMAL_ANY[square.group];
+}
+
+const hasCommonName = ({ name, scientificName }: Taxon) => name !== scientificName;
+
+/** A taxon's common name, or its scientific name in italics when it has none. HTML. */
+export const taxonName = (taxon: Taxon) => (hasCommonName(taxon) ? esc(taxon.name) : `<i>${esc(taxon.name)}</i>`);
+
+/** A taxon's common name with its scientific name, or the scientific name alone when it has no common name. HTML. */
+export const namedTaxon = (taxon: Taxon) =>
+  hasCommonName(taxon) ? `${esc(taxon.name)} (<i>${esc(taxon.scientificName)}</i>)` : taxonName(taxon);
+
+/** "Looks like an Eastern Fox Squirrel": what a Sighting matched. HTML. */
+export const looksLike = (taxon: Taxon) =>
+  hasCommonName(taxon)
+    ? `Looks like ${/^[aeiou]/i.test(taxon.name) ? "an" : "a"} ${taxonName(taxon)}`
+    : `Looks like ${taxonName(taxon)}`;

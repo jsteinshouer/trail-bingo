@@ -12,7 +12,7 @@ import {
   kindOf,
 } from "./icons";
 import { mountSighting } from "./sighting";
-import { esc, messageOf, monthName, placeTitle, secondLine, theCard } from "./text";
+import { esc, looksLike, messageOf, monthName, namedTaxon, placeTitle, secondLine, theCard } from "./text";
 
 const MARK_LABEL: Record<Mark, string> = { verified: "Verified", confirmed: "Confirmed" };
 const MARK_NOTE: Record<Mark, string> = {
@@ -68,6 +68,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
       </div>
       <div class="bingos"><output aria-live="polite">0</output><span data-bingo-word>Bingos</span></div>
     </footer>
+    <p class="found-note" role="status" hidden></p>
     <button class="sighting" type="button" data-take disabled>${ICON_CAMERA}<span class="label">Loading the photo check…</span></button>
     <div class="detail" hidden>
       <button class="scrim" type="button" tabindex="-1" aria-label="Close"></button>
@@ -91,6 +92,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
       paint(state);
       restart(cells[index], "just");
       drawRoutes(state, new Set(outcome.newBingos.map(String)));
+      if (state.size === 5) tellFound(state.squares[index]);
       celebrate(state, outcome);
     },
     onClose: () => take.focus(),
@@ -167,11 +169,12 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
       el.toggleAttribute("data-photo", Boolean(photo));
       const status = square.mark ? MARK_LABEL[square.mark] : "not found yet";
       if (square.kind === "wildcard") {
-        el.querySelector(".sub")!.textContent = square.mark ? "filled" : "anything living";
-        el.setAttribute("aria-label", `Wildcard, ${square.mark ? "filled" : "anything living"}, ${status}`);
+        const sub = square.mark ? (square.found?.name ?? "filled") : "anything living";
+        el.querySelector(".sub")!.textContent = sub;
+        el.setAttribute("aria-label", `Wildcard, ${sub}, ${status}`);
       } else {
         el.querySelector(".sci")!.textContent = secondLine(square);
-        el.setAttribute("aria-label", `${square.name}, ${status}`);
+        el.setAttribute("aria-label", `${square.name}, ${square.found ? `${secondLine(square)}, ` : ""}${status}`);
       }
     });
 
@@ -185,6 +188,26 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
       restart(bingoCount, "bump");
     }
     $("[data-bingo-word]").textContent = state.bingoCount === 1 ? "Bingo" : "Bingos";
+  }
+
+  /* ── What filled a broad Square ─────────────────────────────── */
+
+  const foundNote = $(".found-note");
+  let foundTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * Says what a broad animal Square or the Wildcard was filled with, on a 5×5
+   * Card, whose Squares have no room for the second line that says it.
+   */
+  function tellFound(square: MarkedSquare) {
+    if (!square.found) return;
+    const name = square.kind === "wildcard" ? "Wildcard" : square.kind === "animal" ? square.name : null;
+    if (!name) return;
+    foundNote.innerHTML = `<b>${esc(name)}</b> · ${looksLike(square.found)}`;
+    foundNote.hidden = false;
+    restart(foundNote, "show");
+    clearTimeout(foundTimer);
+    foundTimer = setTimeout(() => (foundNote.hidden = true), 4500);
   }
 
   /* ── Celebrations ─────────────────────────────────────────────── */
@@ -272,7 +295,8 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
       const photo = photos.get(index);
       body =
         (photo ? `<div class="photo"><img src="${photo}" alt="Your Sighting of ${esc(name)}"></div>` : "") +
-        `<div class="status ${square.mark}">${MARK_LABEL[square.mark]}<small>${MARK_NOTE[square.mark]}</small></div>`;
+        `<div class="status ${square.mark}">${MARK_LABEL[square.mark]}<small>${MARK_NOTE[square.mark]}</small></div>` +
+        (square.found ? `<p class="hint">${square.kind === "wildcard" ? "Filled by" : "Looks like"} ${namedTaxon(square.found)}.</p>` : "");
     }
 
     panel.innerHTML = `<div class="panel-head${square.kind === "wildcard" ? " wild" : ""}">${glyph(square)}
