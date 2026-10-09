@@ -22,8 +22,9 @@ export type Square =
 export type Mark = "verified" | "confirmed";
 
 export interface Place {
-  name: string;
-  region: string;
+  /** A place found by name has one; the player's own location doesn't. */
+  name?: string;
+  region?: string;
   lat: number;
   lng: number;
   radiusKm: number;
@@ -32,9 +33,28 @@ export interface Place {
 /** A living thing the photo check can recognize. */
 export interface Taxon {
   group: SpeciesGroup | AnimalGroup;
-  /** Common name. */
+  /** Common name, or the scientific name when it has none. */
   name: string;
   scientificName: string;
+}
+
+/** A species observed near a place, as a species source reports it. */
+export interface LocalSpecies extends Taxon {
+  /** Research-grade observations in the radius and season window. */
+  observations: number;
+}
+
+export interface SpeciesQuery {
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  /** Months to count observations in, 1–12, across all years. */
+  months: number[];
+}
+
+/** Where a Card's species come from: what's been observed near a place this time of year. */
+export interface SpeciesSource {
+  speciesNear(query: SpeciesQuery): Promise<LocalSpecies[]>;
 }
 
 export interface Card {

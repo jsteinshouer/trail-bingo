@@ -1,5 +1,9 @@
+import { generateCard, NotEnoughSpeciesError, SEARCH_RADII_KM, seasonMonths, type CardRequest } from "./card-builder";
 import { candidates, label, rank, VERIFIED_GAP, type Candidate, type Encoder } from "./photo-check";
-import type { Card, CardSize, CardState, Mark, MarkOutcome, SightingOutcome } from "./types";
+import type { Card, CardSize, CardState, Mark, MarkOutcome, SightingOutcome, SpeciesSource } from "./types";
+
+/** Labels per encoder call while building a Card, so progress can be shown between calls. */
+const LABEL_BATCH = 32;
 
 /** Every row, column and diagonal of a Card, as Square indices. */
 function lines(size: CardSize): number[][] {
@@ -13,24 +17,35 @@ function lines(size: CardSize): number[][] {
 }
 
 /**
- * Index of the Wildcard: the center Square on 3×3 and 5×5 Cards, and a random
- * one of the four middle Squares on 4×4.
- */
-export function wildcardPosition(size: CardSize, random: () => number = Math.random): number {
-  if (size !== 4) return (size * size - 1) / 2;
-  const middle = [5, 6, 9, 10];
-  return middle[Math.floor(random() * middle.length)];
-}
-
-/**
  * Where the game's adapters plug in. Each adapter joins this interface in the
- * ticket that builds it: species source (05), fact source (08), store (09).
+ * ticket that builds it: fact source (08), store (09).
  */
 export interface GameAdapters {
   encoder: Encoder;
+  species: SpeciesSource;
+  /** Today, for the season window. */
+  now?: () => Date;
+  /** For picking Squares and the 4×4 Wildcard; seeded in tests. */
+  random?: () => number;
 }
 
+/** How a Card build is going. */
+export type BuildProgress =
+  /** Asking what's been seen within this radius, in these months of any year. */
+  | { step: "species"; radiusKm: number; months: number[] }
+  /** Encoding the local species' labels for the photo check. */
+  | { step: "labels"; done: number; total: number };
+
 export interface Game {
+  /**
+   * Builds a Card from species seen near the place this time of year, with
+   * every local species' label vector ready, and makes it the active Card.
+   * The current Card stays if the build fails. Throws NotEnoughSpeciesError
+   * when even the widest search area can't fill it.
+   */
+  buildCard(request: CardRequest, onProgress?: (progress: BuildProgress) => void): Promise<CardState>;
+  /** Whether there's an active Card, which a new one would replace. */
+  hasCard(): boolean;
   /** Makes this the active Card, with no Squares marked. */
   loadCard(card: Card): void;
   /** Marks a Square. An already-marked Square keeps its first mark. */
@@ -44,7 +59,7 @@ export interface Game {
   state(): CardState;
 }
 
-export function createGame({ encoder }: GameAdapters): Game {
+export function createGame({ encoder, species, now = () => new Date(), random = Math.random }: GameAdapters): Game {
   let card: Card | null = null;
   let marks: (Mark | undefined)[] = [];
   /** The Card's species and their label vectors. Encoding starts as soon as the Card loads. */
@@ -58,14 +73,39 @@ export function createGame({ encoder }: GameAdapters): Game {
   const bingos = () => lines(active().size).filter((line) => line.every((i) => marks[i]));
   const blackout = () => marks.every(Boolean);
 
-  function encodeCandidates(forCard: Card) {
+  async function encodeLabels(forCard: Card, onProgress?: (progress: BuildProgress) => void) {
     const list = candidates(forCard);
-    const encoding = encoder.encodeText(list.map((c) => label(c.taxon))).then((vectors) => ({ list, vectors }));
+    const labels = list.map((c) => label(c.taxon));
+    const vectors: Float32Array[] = [];
+    onProgress?.({ step: "labels", done: 0, total: labels.length });
+    for (let i = 0; i < labels.length; i += LABEL_BATCH) {
+      vectors.push(...(await encoder.encodeText(labels.slice(i, i + LABEL_BATCH))));
+      onProgress?.({ step: "labels", done: vectors.length, total: labels.length });
+    }
+    return { list, vectors };
+  }
+
+  function encodeCandidates(forCard: Card) {
+    const encoding = encodeLabels(forCard);
     // A failure surfaces on the next Sighting, which then tries again.
     encoding.catch(() => {
       if (candidateVectors === encoding) candidateVectors = null;
     });
     return encoding;
+  }
+
+  function state(): CardState {
+    const { place, month, size, squares } = active();
+    const complete = bingos();
+    return {
+      place,
+      month,
+      size,
+      squares: squares.map((square, i) => (marks[i] ? { ...square, mark: marks[i] } : square)),
+      bingos: complete,
+      bingoCount: complete.length,
+      blackout: blackout(),
+    };
   }
 
   function mark(index: number, which: Mark): MarkOutcome {
@@ -78,6 +118,30 @@ export function createGame({ encoder }: GameAdapters): Game {
   }
 
   return {
+    async buildCard(request, onProgress) {
+      if (!request.groups.length) throw new Error("Choose at least one group for the Card");
+      const month = now().getMonth() + 1;
+      const months = seasonMonths(month);
+      let built: Card | null = null;
+      for (const radiusKm of SEARCH_RADII_KM) {
+        onProgress?.({ step: "species", radiusKm, months });
+        const { lat, lng } = request.place;
+        const local = await species.speciesNear({ lat, lng, radiusKm, months });
+        built = generateCard(local, request, month, radiusKm, random);
+        if (built) break;
+      }
+      if (!built) throw new NotEnoughSpeciesError(request.size);
+
+      // Everything the photo check needs is ready before the Card replaces the current one.
+      const vectors = await encodeLabels(built, onProgress);
+      card = built;
+      marks = built.squares.map(() => undefined);
+      candidateVectors = Promise.resolve(vectors);
+      return state();
+    },
+
+    hasCard: () => card !== null,
+
     loadCard(next) {
       const expected = next.size * next.size;
       if (next.squares.length !== expected) {
@@ -107,18 +171,6 @@ export function createGame({ encoder }: GameAdapters): Game {
       return { kind: "unsure", guesses: open.slice(0, 3) };
     },
 
-    state() {
-      const { place, month, size, squares } = active();
-      const complete = bingos();
-      return {
-        place,
-        month,
-        size,
-        squares: squares.map((square, i) => (marks[i] ? { ...square, mark: marks[i] } : square)),
-        bingos: complete,
-        bingoCount: complete.length,
-        blackout: blackout(),
-      };
-    },
+    state,
   };
 }

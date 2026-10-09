@@ -1,15 +1,24 @@
 import type { CardState, Game, Mark, MarkedSquare, MarkOutcome } from "../game";
-import { glyph, ICON_CAMERA, ICON_CLOSE, ICON_CONFIRMED, ICON_IMPRINT, ICON_VERIFIED, KIND_LABEL, kindOf } from "./icons";
+import {
+  glyph,
+  ICON_CAMERA,
+  ICON_CLOSE,
+  ICON_CONFIRMED,
+  ICON_GRID,
+  ICON_IMPRINT,
+  ICON_READY,
+  ICON_VERIFIED,
+  KIND_LABEL,
+  kindOf,
+} from "./icons";
 import { mountSighting } from "./sighting";
-import { esc, messageOf, secondLine } from "./text";
+import { esc, messageOf, monthName, placeTitle, secondLine, theCard } from "./text";
 
 const MARK_LABEL: Record<Mark, string> = { verified: "Verified", confirmed: "Confirmed" };
 const MARK_NOTE: Record<Mark, string> = {
   verified: "The photo check was sure.",
   confirmed: "You picked it from the top guesses.",
 };
-
-const monthName = (month: number) => new Date(2000, month - 1).toLocaleString("en", { month: "long" });
 
 /** Degrees and minutes, as printed in a quad's corners. */
 function dm(value: number): string {
@@ -28,7 +37,7 @@ export interface PhotoCheck {
 }
 
 /** The on-trail Card screen: the sheet, its collars, Square detail, Sightings and celebrations. */
-export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: PhotoCheck) {
+export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: PhotoCheck, options: { onNewCard(): void }) {
   let cells: HTMLButtonElement[] = [];
   /** Sighting photos (object URLs) by Square. Kept on the phone in ticket 09. */
   const photos = new Map<number, string>();
@@ -39,6 +48,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     <header class="collar-top">
       <h1 class="quad-name" data-place></h1>
       <div class="quad-meta" data-meta></div>
+      <button class="menu-btn" type="button" aria-label="New Card" data-new-card>${ICON_GRID}</button>
     </header>
     <div class="sheet-wrap">
       <div class="coords" aria-hidden="true"><span data-north></span><span data-size-tag></span><span data-east></span></div>
@@ -86,6 +96,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     onClose: () => take.focus(),
   });
   take.addEventListener("click", sighting.open);
+  $("[data-new-card]").addEventListener("click", () => options.onNewCard());
 
   // The band says what the photo check is doing until it's ready for Sightings.
   const takeLabel = take.querySelector(".label")!;
@@ -111,8 +122,11 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     const dLat = place.radiusKm / 111;
     const dLng = place.radiusKm / (111 * Math.cos((place.lat * Math.PI) / 180));
 
-    $("[data-place]").textContent = place.name;
-    $("[data-meta]").innerHTML = `${esc(place.region)} · ${monthName(month)}<br>Demo Card`;
+    $("[data-place]").textContent = placeTitle(place);
+    // A built Card needs no signal to play. Keeping it across restarts is ticket 09.
+    $("[data-meta]").innerHTML =
+      `${[place.region, monthName(month)].flatMap((part) => (part ? [esc(part)] : [])).join(" · ")}<br>` +
+      `<span class="ready">${ICON_READY}Ready offline</span>`;
     $("[data-north]").textContent = dm(place.lat + dLat);
     $("[data-south]").textContent = dm(place.lat - dLat);
     $("[data-east]").textContent = dm(place.lng + dLng);
@@ -184,7 +198,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
   function celebrateBingo(state: CardState) {
     const n = state.bingoCount;
     $(".stamp .small").textContent =
-      n === 1 ? `First Bingo on the ${state.place.name} Card` : `${n} Bingos on the ${state.place.name} Card`;
+      n === 1 ? `First Bingo on ${theCard(state.place)}` : `${n} Bingos on ${theCard(state.place)}`;
     restart($(".stamp"), "show");
     restart(sheet, "shake");
     setTimeout(() => navigator.vibrate?.([40, 60, 40]), 500);
@@ -199,7 +213,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     plate.innerHTML = `<span class="plate">
         <span class="big">BLACKOUT</span>
         <span class="rev">Photorevised · ${monthName(now.getMonth() + 1)} ${now.getFullYear()}</span>
-        <span class="text">Every Square on the ${esc(state.place.name)} Card is marked. ${plural(state.bingoCount, "Bingo")} along the way.</span>
+        <span class="text">Every Square on ${esc(theCard(state.place))} is marked. ${plural(state.bingoCount, "Bingo")} along the way.</span>
         <span class="tap">Tap to keep exploring</span>
       </span>`;
     // Stays until tapped, so everyone can look at the finished Card together.
@@ -321,6 +335,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
 
   // Redraw map linework whenever the sheet changes size (font load, rotation).
   new ResizeObserver(() => {
+    if (!cells.length) return;
     drawLinework();
     drawRoutes(game.state(), new Set());
   }).observe(sheet);
