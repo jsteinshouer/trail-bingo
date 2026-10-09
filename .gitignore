@@ -1,2 +1,4 @@
 node_modules/
 dist/
+# BioCLIP model files: `npm run models` links them from the spike export (ticket 04 replaces this)
+public/models/

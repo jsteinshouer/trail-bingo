@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGame, wildcardPosition, type Card, type CardSize, type Square } from "./index";
+import { createGame, wildcardPosition, type Card, type CardSize, type Encoder, type Square } from "./index";
 
 const species = (name: string): Square => ({
   kind: "species",
@@ -15,14 +15,18 @@ function card(size: CardSize): Card {
     place: { name: "Elkhorn", region: "Nebraska", lat: 41.28, lng: -96.24, radiusKm: 10 },
     month: 10,
     size,
+    localSpecies: [],
     squares: Array.from({ length: size * size }, (_, i) =>
       i === wild ? { kind: "wildcard" } : species(`Species ${i}`),
     ),
   };
 }
 
+// These tests never take a Sighting, so the encoder is never asked for real vectors.
+const encoder: Encoder = { encodeText: async (labels) => labels.map(() => new Float32Array(1)) };
+
 function playing(size: CardSize) {
-  const game = createGame();
+  const game = createGame({ encoder });
   game.loadCard(card(size));
   return game;
 }
@@ -203,7 +207,7 @@ describe("loading a Card", () => {
   it("rejects a Card whose Squares don't fill its grid", () => {
     const short = { ...card(3), squares: card(3).squares.slice(1) };
 
-    expect(() => createGame().loadCard(short)).toThrow(/9 Squares/);
+    expect(() => createGame({ encoder }).loadCard(short)).toThrow(/9 Squares/);
   });
 
   it("starts with no Squares marked", () => {
