@@ -4,6 +4,8 @@ import platteRiver from "./fixtures/search-platte-river.json";
 import elkhorn from "./fixtures/search-elkhorn.json";
 import moab from "./fixtures/search-moab.json";
 import nothing from "./fixtures/search-nothing.json";
+import brightAngel from "./fixtures/search-bright-angel.json";
+import utah from "./fixtures/search-utah.json";
 
 /* Recorded Nominatim search responses (see fixtures/record.sh). */
 
@@ -60,6 +62,27 @@ describe("searching for a place by name", () => {
     expect(places[2]).toMatchObject({ name: "Moab", region: "Philippines" });
   });
 
+  it("finds a trail, leaving out streets that share its name", async () => {
+    const places = await searchWith(200, brightAngel).search("Bright Angel Trail");
+
+    // Nominatim's best matches are three residential streets; only the two paths are trails.
+    expect(places).toHaveLength(2);
+    expect(places[0]).toEqual({
+      name: "Bright Angel Trail",
+      region: "Arizona",
+      lat: 36.0631452,
+      lng: -112.140069,
+      detail: "Trail · Grand Canyon Village, Coconino County, Arizona, United States",
+    });
+  });
+
+  it("gives a state its country as the region, not itself", async () => {
+    const [state, county] = await searchWith(200, utah).search("Utah");
+
+    expect(state).toMatchObject({ name: "Utah", region: "United States", detail: "State · United States" });
+    expect(county).toMatchObject({ name: "Utah County", region: "Utah" });
+  });
+
   it("finds nothing for a name no place has", async () => {
     expect(await searchWith(200, nothing).search("Zzyzxqqq Trailhead")).toEqual([]);
   });
@@ -69,6 +92,15 @@ describe("searching for a place by name", () => {
 
     expect(await createPlaceSearch({ fetch: nominatim.fetch }).search("   ")).toEqual([]);
     expect(nominatim.urls).toEqual([]);
+  });
+
+  it("doesn't ask Nominatim again for a search it has already answered", async () => {
+    const nominatim = fakeNominatim(200, moab);
+    const search = createPlaceSearch({ fetch: nominatim.fetch });
+    const first = await search.search("Moab");
+
+    expect(await search.search(" moab ")).toEqual(first);
+    expect(nominatim.urls).toHaveLength(1);
   });
 
   it("fails clearly when Nominatim answers with an error", async () => {

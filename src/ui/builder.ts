@@ -16,6 +16,9 @@ const GROUPS: { group: CardGroup; label: string }[] = [
   { group: "animal", label: "Animals" },
 ];
 
+/** Where a Card is for, before its search area is known. */
+type Where = Omit<Place, "radiusKm">;
+
 /** "41.29° N" */
 const degrees = (value: number, positive: string, negative: string) =>
   `${Math.abs(value).toFixed(2)}° ${value < 0 ? negative : positive}`;
@@ -54,7 +57,10 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
           <button class="btn search" type="submit">Search</button>
         </div>
         <p class="search-note" aria-live="polite"></p>
-        <ul class="places" aria-label="Places found" hidden></ul>
+        <div class="places" hidden>
+          <ul aria-label="Places found"></ul>
+          <p class="credit">Places © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
+        </div>
         <p class="or" aria-hidden="true">or</p>
         <button class="btn locate" type="button">${ICON_LOCATE}Use my location</button>
         <p class="place-line" aria-live="polite"></p>
@@ -84,14 +90,15 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
   const query = $<HTMLInputElement>('input[name="q"]');
   const searchButton = $<HTMLButtonElement>(".search");
   const searchNote = $(".search-note");
-  const found = $<HTMLUListElement>(".places");
+  const placeList = $(".places");
+  const placeItems = $<HTMLUListElement>(".places ul");
   const placeLine = $(".place-line");
   const status = $(".build-status");
   const build = $<HTMLButtonElement>("[data-build]");
   const buildLabel = $("[data-build] .label");
   const closeButton = $(".close");
 
-  let place: Omit<Place, "radiusKm"> | null = null;
+  let place: Where | null = null;
   let results: FoundPlace[] = [];
   let building = false;
 
@@ -121,7 +128,7 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
   }
 
   /** Makes this the Card's place, ready to build. */
-  function choose(next: Omit<Place, "radiusKm">) {
+  function choose(next: Where) {
     place = next;
     showPlace();
     clearResults();
@@ -132,12 +139,12 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
 
   function clearResults() {
     results = [];
-    found.hidden = true;
-    found.innerHTML = "";
+    placeList.hidden = true;
+    placeItems.innerHTML = "";
     searchNote.textContent = "";
   }
 
-  async function search() {
+  async function runSearch() {
     const name = query.value.trim();
     if (!name) return query.focus();
     clearResults();
@@ -148,14 +155,14 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
       searchNote.textContent = results.length
         ? ""
         : `No place called “${name}” was found. Try a nearby town or park, or check the spelling.`;
-      found.innerHTML = results
+      placeItems.innerHTML = results
         .map(
           (p, i) => `<li><button class="found" type="button" data-place="${i}">
             <span class="name">${esc(p.name)}</span><span class="second">${esc(p.detail)}</span></button></li>`,
         )
         .join("");
-      found.hidden = !results.length;
-      found.querySelector<HTMLElement>("button")?.focus();
+      placeList.hidden = !results.length;
+      placeItems.querySelector<HTMLElement>("button")?.focus();
     } catch (error) {
       searchNote.innerHTML = `<span class="problem">${esc(messageOf(error))} You can still use your location.</span>`;
     } finally {
@@ -237,9 +244,9 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
   // The only submit is the search: Enter in the search box, or its button.
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    search();
+    runSearch();
   });
-  found.addEventListener("click", (event) => {
+  placeItems.addEventListener("click", (event) => {
     const button = (event.target as Element).closest<HTMLButtonElement>("button[data-place]");
     if (!button) return;
     const { name, region, lat, lng } = results[Number(button.dataset.place)];

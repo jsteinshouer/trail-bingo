@@ -4,17 +4,25 @@
  * sends OpenStreetMap's Nominatim the typed name and nothing else.
  */
 
-const SEARCH = "https://nominatim.openstreetmap.org/search";
+import type { Place } from "../game";
 
-/** A place that matched a search. */
-export interface FoundPlace {
+const API = "https://nominatim.openstreetmap.org/search";
+
+/** How many places a search shows. */
+const SHOWN = 8;
+
+/** A place that matched a search: where a Card could be built. */
+export interface FoundPlace extends Omit<Place, "radiusKm"> {
   name: string;
-  /** State, or country where there's no state. */
+  /** State; country for a place with no state, or for a state itself. */
   region: string;
-  lat: number;
-  lng: number;
   /** What and where it is, to tell same-named places apart: "Nature reserve · Cass County, Nebraska, United States". */
   detail: string;
+}
+
+export interface PlaceSearch {
+  /** Trails, parks and towns matching a name, best first. */
+  search(name: string): Promise<FoundPlace[]>;
 }
 
 interface NominatimResult {
@@ -22,21 +30,28 @@ interface NominatimResult {
   display_name: string;
   lat: string;
   lon: string;
+  category: string;
   type: string;
   addresstype?: string;
-  address?: Partial<Record<"village" | "town" | "city" | "county" | "state" | "country", string>>;
+  address?: Partial<Record<(typeof ADDRESS_PARTS)[number], string>>;
 }
 
-const LOCALITY = ["village", "town", "city", "county", "state", "country"] as const;
+/** Address parts that say where a place is, smallest first. */
+const ADDRESS_PARTS = ["village", "town", "city", "county", "state", "country"] as const;
+
+/** Ways you can hike. Other roads that share a trail's name ("Bright Angel Trail" in a suburb) aren't places to build a Card. */
+const TRAILS = new Set(["path", "footway", "track", "bridleway", "cycleway", "steps"]);
+
+const isRoad = (result: NominatimResult) => result.category === "highway" && !TRAILS.has(result.type);
 
 function toPlace(result: NominatimResult): FoundPlace {
   const name = result.name || result.display_name.split(",")[0];
   const address = result.address ?? {};
-  const kind = (result.addresstype ?? result.type).replace(/_/g, " ");
-  const where = LOCALITY.flatMap((part) => (address[part] && address[part] !== name ? [address[part]] : []));
+  const kind = result.category === "highway" ? "trail" : (result.addresstype ?? result.type).replace(/_/g, " ");
+  const where = ADDRESS_PARTS.flatMap((part) => (address[part] && address[part] !== name ? [address[part]] : []));
   return {
     name,
-    region: address.state ?? address.country ?? "",
+    region: (address.state !== name && address.state) || address.country || "",
     lat: Number(result.lat),
     lng: Number(result.lon),
     detail: [kind.charAt(0).toUpperCase() + kind.slice(1), where.join(", ")].filter(Boolean).join(" · "),
@@ -45,18 +60,27 @@ function toPlace(result: NominatimResult): FoundPlace {
 
 /**
  * Finds trails, parks and towns by name. Nominatim's usage policy rules out
- * searching as the player types, so this runs once per submitted search.
+ * searching as the player types, and asks for answers to be reused, so this
+ * runs once per submitted search and remembers what it found.
  */
-export function createPlaceSearch({ fetch }: { fetch: typeof globalThis.fetch }) {
+export function createPlaceSearch({ fetch }: { fetch: typeof globalThis.fetch }): PlaceSearch {
+  const answered = new Map<string, FoundPlace[]>();
+
   return {
-    async search(query: string): Promise<FoundPlace[]> {
-      if (!query.trim()) return [];
-      const url = new URL(SEARCH);
+    async search(name) {
+      const query = name.trim();
+      if (!query) return [];
+      const key = query.toLowerCase();
+      const known = answered.get(key);
+      if (known) return known;
+
+      const url = new URL(API);
+      // More than are shown, since roads that share a trail's name are dropped.
       url.search = new URLSearchParams({
-        q: query.trim(),
+        q: query,
         format: "jsonv2",
         addressdetails: "1",
-        limit: "8",
+        limit: "15",
         "accept-language": "en",
       }).toString();
       let response: Response;
@@ -66,7 +90,12 @@ export function createPlaceSearch({ fetch }: { fetch: typeof globalThis.fetch })
         throw new Error("Couldn't reach the place search. Check your connection, then try again.");
       }
       if (!response.ok) throw new Error(`The place search couldn't answer (HTTP ${response.status}). Try again in a minute.`);
-      return ((await response.json()) as NominatimResult[]).map(toPlace);
+      const places = ((await response.json()) as NominatimResult[])
+        .filter((result) => !isRoad(result))
+        .slice(0, SHOWN)
+        .map(toPlace);
+      answered.set(key, places);
+      return places;
     },
   };
 }
