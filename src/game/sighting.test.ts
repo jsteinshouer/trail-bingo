@@ -195,7 +195,7 @@ describe("a sure Sighting of a local species that isn't on the Card", () => {
     const before = game.state();
     const outcome = await game.sighting(photo({ "Argiope aurantia": 0.3, "Sciurus niger": 0.3 - SURE }));
 
-    expect(outcome).toEqual({ kind: "not-on-card", taxon: SPIDER, wildcard: { index: WILDCARD, found: YARROW } });
+    expect(outcome).toEqual({ kind: "not-on-card", taxon: SPIDER, wildcardFilledBy: YARROW });
     expect(game.state()).toEqual(before);
   });
 

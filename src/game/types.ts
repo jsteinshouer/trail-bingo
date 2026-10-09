@@ -114,4 +114,4 @@ export type SightingOutcome =
    * The photo check was sure it's a local species that isn't on the Card, and
    * the Wildcard it would have filled is already filled. Nothing changed.
    */
-  | { kind: "not-on-card"; taxon: Taxon; wildcard?: { index: number; found?: Taxon } };
+  | { kind: "not-on-card"; taxon: Taxon; wildcardFilledBy?: Taxon };

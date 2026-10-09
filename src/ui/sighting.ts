@@ -1,6 +1,6 @@
 import type { Game, MarkOutcome, SightingOutcome, Taxon } from "../game";
 import { glyph, ICON_CAMERA, ICON_CLOSE } from "./icons";
-import { esc, looksLike, messageOf, namedTaxon, secondLine } from "./text";
+import { esc, looksLike, messageOf, namedTaxon, secondLine, taxonName } from "./text";
 
 /** Longest side of a stored Sighting photo: plenty for a Square and the detail panel, small to keep. */
 const PHOTO_SIDE = 768;
@@ -150,12 +150,12 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
           <p class="hint">You've already marked this Square, so your Card stays as it is.</p>
           <div class="actions">${done}${again}</div>`);
       case "not-on-card": {
-        const filled = outcome.wildcard?.found;
-        const wildcard = outcome.wildcard
-          ? ` Your Wildcard is already filled${filled ? ` with ${hasName(filled)}` : ""}, so your Card stays as it is.`
+        const filledBy = outcome.wildcardFilledBy;
+        const wildcardNote = filledBy
+          ? ` Your Wildcard is already filled with ${taxonName(filledBy)}, so your Card stays as it is.`
           : "";
         return show(`<h3>Not on your Card</h3>
-          <p class="hint">This looks like ${namedTaxon(outcome.taxon)}.${wildcard}</p>
+          <p class="hint">This looks like ${namedTaxon(outcome.taxon)}.${wildcardNote}</p>
           <div class="actions">${done}${again}</div>`);
       }
       case "unsure":
@@ -235,9 +235,6 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
 
   return { open: openCamera };
 }
-
-/** A taxon's common name, or its scientific name in italics when it has none. HTML. */
-const hasName = (taxon: Taxon) => (taxon.name === taxon.scientificName ? `<i>${esc(taxon.name)}</i>` : esc(taxon.name));
 
 function cameraProblem(error: unknown): string {
   const name = error instanceof DOMException ? error.name : "";

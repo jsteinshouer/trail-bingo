@@ -288,7 +288,7 @@ button { font: inherit; color: inherit; }
 .found-note {
   position: absolute; left: var(--gutter); right: var(--gutter); bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 5;
   margin: 0; padding: 10px 12px;
-  background: var(--paper); border: 1.5px solid var(--purple); box-shadow: 0 6px 18px -8px rgba(40, 10, 50, .4);
+  background: var(--paper); border: 1.5px solid var(--purple);
   font: 500 16px/1.35 var(--face-text); color: var(--ink);
   pointer-events: none;
 }

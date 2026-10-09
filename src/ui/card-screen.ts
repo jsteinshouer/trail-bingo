@@ -92,7 +92,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
       paint(state);
       restart(cells[index], "just");
       drawRoutes(state, new Set(outcome.newBingos.map(String)));
-      tellFound(state.squares[index]);
+      if (state.size === 5) tellFound(state.squares[index]);
       celebrate(state, outcome);
     },
     onClose: () => take.focus(),
@@ -196,8 +196,8 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
   let foundTimer: ReturnType<typeof setTimeout> | undefined;
 
   /**
-   * Says what a broad animal Square or the Wildcard was filled with. The
-   * Square says it too, but a 5×5 Square has no room for a second line.
+   * Says what a broad animal Square or the Wildcard was filled with, on a 5×5
+   * Card, whose Squares have no room for the second line that says it.
    */
   function tellFound(square: MarkedSquare) {
     if (!square.found) return;

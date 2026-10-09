@@ -116,14 +116,14 @@ export function createGame({ encoder, species, now = () => new Date(), random = 
     };
   }
 
-  function mark(index: number, which: Mark, taxon?: Taxon): MarkOutcome {
+  function mark(index: number, which: Mark, what?: Taxon): MarkOutcome {
     if (!Number.isInteger(index) || index < 0 || index >= active().squares.length) {
       throw new Error(`Square ${index} isn't on this Card`);
     }
     if (marks[index]) return { newBingos: [], blackout: false };
     marks[index] = which;
     // A species Square already names what was found.
-    if (taxon && active().squares[index].kind !== "species") found[index] = taxon;
+    if (what && active().squares[index].kind !== "species") found[index] = what;
     return { newBingos: bingos().filter((line) => line.includes(index)), blackout: blackout() };
   }
 
@@ -146,7 +146,7 @@ export function createGame({ encoder, species, now = () => new Date(), random = 
       const vectors = await encodeLabels(built, onProgress);
       card = built;
       marks = built.squares.map(() => undefined);
-      found = [];
+      found = built.squares.map(() => undefined);
       candidateVectors = Promise.resolve(vectors);
       return state();
     },
@@ -160,7 +160,7 @@ export function createGame({ encoder, species, now = () => new Date(), random = 
       }
       card = next;
       marks = next.squares.map(() => undefined);
-      found = [];
+      found = next.squares.map(() => undefined);
       candidateVectors = encodeCandidates(next);
     },
 
@@ -180,7 +180,7 @@ export function createGame({ encoder, species, now = () => new Date(), random = 
           const wild = cardAtStart.squares.findIndex((s) => s.kind === "wildcard");
           if (wild < 0) return { kind: "not-on-card", taxon };
           if (!marks[wild]) return { kind: "verified", index: wild, taxon, mark: mark(wild, "verified", taxon) };
-          return { kind: "not-on-card", taxon, wildcard: { index: wild, found: found[wild] } };
+          return { kind: "not-on-card", taxon, wildcardFilledBy: found[wild] };
         }
         if (marks[square]) return { kind: "already-marked", index: square, taxon };
         return { kind: "verified", index: square, taxon, mark: mark(square, "verified", taxon) };

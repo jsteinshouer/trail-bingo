@@ -35,12 +35,15 @@ export function secondLine(square: Exclude<MarkedSquare, { kind: "wildcard" }>):
 
 const hasCommonName = ({ name, scientificName }: Taxon) => name !== scientificName;
 
+/** A taxon's common name, or its scientific name in italics when it has none. HTML. */
+export const taxonName = (taxon: Taxon) => (hasCommonName(taxon) ? esc(taxon.name) : `<i>${esc(taxon.name)}</i>`);
+
 /** A taxon's common name with its scientific name, or the scientific name alone when it has no common name. HTML. */
 export const namedTaxon = (taxon: Taxon) =>
-  hasCommonName(taxon) ? `${esc(taxon.name)} (<i>${esc(taxon.scientificName)}</i>)` : `<i>${esc(taxon.name)}</i>`;
+  hasCommonName(taxon) ? `${esc(taxon.name)} (<i>${esc(taxon.scientificName)}</i>)` : taxonName(taxon);
 
 /** "Looks like an Eastern Fox Squirrel": what a Sighting matched. HTML. */
 export const looksLike = (taxon: Taxon) =>
   hasCommonName(taxon)
-    ? `Looks like ${/^[aeiou]/i.test(taxon.name) ? "an" : "a"} ${esc(taxon.name)}`
-    : `Looks like <i>${esc(taxon.name)}</i>`;
+    ? `Looks like ${/^[aeiou]/i.test(taxon.name) ? "an" : "a"} ${taxonName(taxon)}`
+    : `Looks like ${taxonName(taxon)}`;
