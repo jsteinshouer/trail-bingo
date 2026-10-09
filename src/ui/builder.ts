@@ -1,5 +1,4 @@
 import { NotEnoughSpeciesError, type BuildProgress, type CardGroup, type CardSize, type Game } from "../game";
-import type { PlaceName } from "../places";
 import { ICON_CLOSE, ICON_LOCATE, kindGlyph } from "./icons";
 import { esc, messageOf, monthName } from "./text";
 
@@ -16,11 +15,13 @@ const GROUPS: { group: CardGroup; label: string }[] = [
   { group: "animal", label: "Animals" },
 ];
 
+/** "41.29° N" */
+const degrees = (value: number, positive: string, negative: string) =>
+  `${Math.abs(value).toFixed(2)}° ${value < 0 ? negative : positive}`;
+
 export interface BuilderOptions {
   /** The device's location. */
   locate(): Promise<{ lat: number; lng: number }>;
-  /** A name for a place, or null if it has none. */
-  nameOf(lat: number, lng: number): Promise<PlaceName | null>;
   /** The new Card is the active one and ready offline. */
   onBuilt(): void;
 }
@@ -75,7 +76,7 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
   const buildLabel = $("[data-build] .label");
   const closeButton = $(".close");
 
-  let place: (PlaceName & { lat: number; lng: number }) | null = null;
+  let place: { lat: number; lng: number } | null = null;
   let building = false;
 
   const size = () => Number(new FormData(form).get("size")) as CardSize;
@@ -99,11 +100,8 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
     locate.disabled = true;
     placeLine.textContent = "Finding where you are…";
     try {
-      const { lat, lng } = await options.locate();
-      // A Card works without a name, so a failed lookup just leaves it plain.
-      const name = await options.nameOf(lat, lng).catch(() => null);
-      place = { ...(name ?? { name: "Your location", region: "" }), lat, lng };
-      placeLine.innerHTML = `<b>${esc(place.name)}</b>${place.region ? `, ${esc(place.region)}` : ""}`;
+      place = await options.locate();
+      placeLine.innerHTML = `<b>Your location</b> · ${degrees(place.lat, "N", "S")}, ${degrees(place.lng, "E", "W")}`;
       showStatus("");
     } catch (error) {
       place = null;
@@ -120,7 +118,7 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
     const current = game.state();
     const marked = current.squares.filter((s) => s.mark).length;
     showStatus(`<div class="confirm">
-        <h3>Replace your ${esc(current.place.name)} Card?</h3>
+        <h3>Replace ${current.place.name ? `your ${esc(current.place.name)} Card` : "your current Card"}?</h3>
         <p class="hint">${marked ? `Its ${marked === 1 ? "marked Square" : `${marked} marked Squares`} will be cleared.` : "Nothing's marked on it yet."}</p>
         <div class="actions"><button class="btn" type="button" data-replace>Replace it</button><button class="btn" type="button" data-keep>Keep my Card</button></div>
       </div>`);
@@ -145,8 +143,7 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
   async function buildCard() {
     if (!place) return;
     // Read the choices first: the form's controls are disabled while building, and FormData skips disabled ones.
-    const { name, region, lat, lng } = place;
-    const request = { place: { name, region, lat, lng }, size: size(), groups: groups() };
+    const request = { place, size: size(), groups: groups() };
     building = true;
     refresh();
     try {

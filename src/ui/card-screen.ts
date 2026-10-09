@@ -12,7 +12,7 @@ import {
   kindOf,
 } from "./icons";
 import { mountSighting } from "./sighting";
-import { esc, messageOf, monthName, secondLine } from "./text";
+import { esc, messageOf, monthName, placeTitle, secondLine, theCard } from "./text";
 
 const MARK_LABEL: Record<Mark, string> = { verified: "Verified", confirmed: "Confirmed" };
 const MARK_NOTE: Record<Mark, string> = {
@@ -122,10 +122,10 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     const dLat = place.radiusKm / 111;
     const dLng = place.radiusKm / (111 * Math.cos((place.lat * Math.PI) / 180));
 
-    $("[data-place]").textContent = place.name;
+    $("[data-place]").textContent = placeTitle(place);
     // A built Card needs no signal to play. Keeping it across restarts is ticket 09.
     $("[data-meta]").innerHTML =
-      `${[place.region, monthName(month)].filter(Boolean).map(esc).join(" · ")}<br>` +
+      `${[place.region, monthName(month)].flatMap((part) => (part ? [esc(part)] : [])).join(" · ")}<br>` +
       `<span class="ready">${ICON_READY}Ready offline</span>`;
     $("[data-north]").textContent = dm(place.lat + dLat);
     $("[data-south]").textContent = dm(place.lat - dLat);
@@ -198,7 +198,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
   function celebrateBingo(state: CardState) {
     const n = state.bingoCount;
     $(".stamp .small").textContent =
-      n === 1 ? `First Bingo on the ${state.place.name} Card` : `${n} Bingos on the ${state.place.name} Card`;
+      n === 1 ? `First Bingo on ${theCard(state.place)}` : `${n} Bingos on ${theCard(state.place)}`;
     restart($(".stamp"), "show");
     restart(sheet, "shake");
     setTimeout(() => navigator.vibrate?.([40, 60, 40]), 500);
@@ -213,7 +213,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     plate.innerHTML = `<span class="plate">
         <span class="big">BLACKOUT</span>
         <span class="rev">Photorevised · ${monthName(now.getMonth() + 1)} ${now.getFullYear()}</span>
-        <span class="text">Every Square on the ${esc(state.place.name)} Card is marked. ${plural(state.bingoCount, "Bingo")} along the way.</span>
+        <span class="text">Every Square on ${esc(theCard(state.place))} is marked. ${plural(state.bingoCount, "Bingo")} along the way.</span>
         <span class="tap">Tap to keep exploring</span>
       </span>`;
     // Stays until tapped, so everyone can look at the finished Card together.

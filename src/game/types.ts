@@ -22,8 +22,9 @@ export type Square =
 export type Mark = "verified" | "confirmed";
 
 export interface Place {
-  name: string;
-  region: string;
+  /** A place found by name has one; the player's own location doesn't. */
+  name?: string;
+  region?: string;
   lat: number;
   lng: number;
   radiusKm: number;

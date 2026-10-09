@@ -118,6 +118,13 @@ describe("building a Card", () => {
     expect(card.month).toBe(10);
   });
 
+  it("leaves a Card for the player's own location unnamed", async () => {
+    const { game } = setup();
+    const card = await game.buildCard({ place: { lat: ELKHORN.lat, lng: ELKHORN.lng }, size: 3, groups: ALL_GROUPS });
+
+    expect(card.place).toEqual({ lat: ELKHORN.lat, lng: ELKHORN.lng, radiusKm: 10 });
+  });
+
   it("never repeats a Square", async () => {
     const { game } = setup();
     const card = await game.buildCard(request(5));

@@ -40,17 +40,17 @@
   - Species with no common name stay in the local list (labelled "a photo of *X*.") but never name a Square. Arachnids other than spiders are dropped.
   - Common names are capitalized as iNaturalist gives them ("Common Sunflower", "Giant blue sage").
 - **Place:**
-  - "Use my location" rounds the position to about 1 km before it leaves the phone.
-  - The Card's name comes from OpenStreetMap Nominatim reverse geocoding at zoom 14, which gives "Elkhorn" rather than the city of Omaha around it. In the backcountry it falls back to the county, and on failure to "Your location". Tested against recorded responses (`src/places/fixtures/`).
-  - Nominatim is a second service that sees the rough location. Ticket 06's place search will use a geocoder anyway.
+  - "Use my location" rounds the position to about 1 km before it leaves the phone, and only iNaturalist sees it.
+  - A Card built where the player stands has no place name (`Place.name` is optional). It's titled "Your location", and its copy says "this Card" / "your current Card".
+  - Reverse geocoding (Nominatim) was tried and dropped so that no second service learns the location. A place found by ticket 06's search will carry its own name.
 - **UI:**
   - The builder overlay (`src/ui/builder.ts`) has Where, Card size and "What to look for", plus a progress bar for label encoding.
-  - Building over a Card asks "Replace your Elkhorn Card?" first.
+  - Building over a Card asks "Replace your current Card?" first (or names the place when the Card has one).
   - The Card screen's collar has the grid button (New Card for now; ticket 08 can make it the Card menu with photo credits) and "Ready offline".
   - The demo Card is gone, so the app opens on the builder.
-- **Checked in headless Chromium** (fake geolocation at Elkhorn, real iNaturalist and Nominatim):
-  - Elkhorn, Nebraska → 3×3 Card: 2 plants, 2 trees, 2 fungi, 2 animal groups, Wildcard in the center → "Ready offline".
-  - New Card → "Replace your Elkhorn Card?" → Keep kept it.
+- **Checked in headless Chromium** (fake geolocation at Elkhorn, real iNaturalist):
+  - "Your location · 41.29° N, 96.24° W" → 3×3 Card: 2 plants, 2 trees, 2 fungi, 2 animal groups, Wildcard in the center → "Ready offline". The only requests were the two to iNaturalist, with rounded coordinates.
+  - New Card → "Replace your current Card?" → Keep kept it.
 - **For later tickets:**
   - **Build time:** 504 local species took about 5 minutes to encode on the dev machine's WebAssembly fallback (about 0.5 s per label, plus about 55 s to load the model). On the phone with WebGPU this should be much faster, but it hasn't been measured. If it's slow, lower `PER_REQUEST` in `src/species/index.ts`.
   - **"Ready offline"** is true for the current session: playing needs no signal. But the Card lives in memory until ticket 09 stores it, and reference photos and facts arrive with ticket 08.

@@ -1,6 +1,12 @@
-import type { AnimalGroup, Square } from "../game";
+import type { AnimalGroup, Place, Square } from "../game";
 
 export const monthName = (month: number) => new Date(2000, month - 1).toLocaleString("en", { month: "long" });
+
+/** The Card's title: its place, or "Your location" when it was built where the player stood. */
+export const placeTitle = (place: Place) => place.name ?? "Your location";
+
+/** "the Elkhorn Card", or "this Card" when it has no place name. Not escaped. */
+export const theCard = (place: Place) => (place.name ? `the ${place.name} Card` : "this Card");
 
 /** An error's message, for showing the player. */
 export const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
