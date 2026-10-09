@@ -1,6 +1,17 @@
 import { generateCard, NotEnoughSpeciesError, SEARCH_RADII_KM, seasonMonths, type CardRequest } from "./card-builder";
 import { candidates, label, rank, VERIFIED_GAP, type Candidate, type Encoder } from "./photo-check";
-import type { Card, CardSize, CardState, Mark, MarkOutcome, SightingOutcome, SpeciesSource, Taxon } from "./types";
+import type {
+  Card,
+  CardSize,
+  CardState,
+  Fact,
+  FactSource,
+  Mark,
+  MarkOutcome,
+  SightingOutcome,
+  SpeciesSource,
+  Taxon,
+} from "./types";
 
 /** Labels per encoder call while building a Card, so progress can be shown between calls. */
 const LABEL_BATCH = 32;
@@ -17,12 +28,13 @@ function lines(size: CardSize): number[][] {
 }
 
 /**
- * Where the game's adapters plug in. Each adapter joins this interface in the
- * ticket that builds it: fact source (08), store (09).
+ * Where the game's adapters plug in. The store joins this interface in
+ * ticket 09.
  */
 export interface GameAdapters {
   encoder: Encoder;
   species: SpeciesSource;
+  facts: FactSource;
   /** Today, for the season window. */
   now?: () => Date;
   /** For picking Squares and the 4×4 Wildcard; seeded in tests. */
@@ -33,6 +45,8 @@ export interface GameAdapters {
 export type BuildProgress =
   /** Asking what's been seen within this radius, in these months of any year. */
   | { step: "species"; radiusKm: number; months: number[] }
+  /** Fetching facts and reference photos for the local species, while there's signal. */
+  | { step: "facts"; done: number; total: number }
   /** Encoding the local species' labels for the photo check. */
   | { step: "labels"; done: number; total: number };
 
@@ -46,6 +60,13 @@ export interface Game {
   buildCard(request: CardRequest, onProgress?: (progress: BuildProgress) => void): Promise<CardState>;
   /** Whether there's an active Card, which a new one would replace. */
   hasCard(): boolean;
+  /** What there is to learn about a local species on the active Card. */
+  factFor(taxon: Taxon): Fact | undefined;
+  /**
+   * What an unmarked Square looks like, as a clue: its own species, or the
+   * most observed local species for a broad animal Square. The Wildcard has none.
+   */
+  clue(index: number): { taxon: Taxon; fact?: Fact } | null;
   /** Makes this the active Card, with no Squares marked. */
   loadCard(card: Card): void;
   /**
@@ -63,7 +84,7 @@ export interface Game {
   state(): CardState;
 }
 
-export function createGame({ encoder, species, now = () => new Date(), random = Math.random }: GameAdapters): Game {
+export function createGame({ encoder, species, facts, now = () => new Date(), random = Math.random }: GameAdapters): Game {
   let card: Card | null = null;
   let marks: (Mark | undefined)[] = [];
   /** What marked each broad animal Square and the Wildcard. */
@@ -98,6 +119,34 @@ export function createGame({ encoder, species, now = () => new Date(), random = 
       if (candidateVectors === encoding) candidateVectors = null;
     });
     return encoding;
+  }
+
+  /**
+   * Facts for every local species. The Card's own species and an example for
+   * each animal Square get bigger photos, since they're the clues.
+   */
+  async function fetchFacts(forCard: Card, onProgress?: (progress: BuildProgress) => void) {
+    const examples = new Set(
+      forCard.squares.flatMap((square) => {
+        if (square.kind === "species") return [square.scientificName];
+        if (square.kind === "animal") return [forCard.localSpecies.find((t) => t.group === square.group)?.scientificName ?? ""];
+        return [];
+      }),
+    );
+    const clues = forCard.localSpecies.filter((t) => examples.has(t.scientificName));
+    const rest = forCard.localSpecies.filter((t) => !examples.has(t.scientificName));
+    const total = forCard.localSpecies.length;
+    onProgress?.({ step: "facts", done: 0, total });
+    const big = await facts.factsFor(clues, {
+      photoSize: "medium",
+      onProgress: (done) => onProgress?.({ step: "facts", done, total }),
+    });
+    const small = await facts.factsFor(rest, {
+      photoSize: "small",
+      onProgress: (done) => onProgress?.({ step: "facts", done: clues.length + done, total }),
+    });
+    onProgress?.({ step: "facts", done: total, total });
+    return Object.fromEntries([...big, ...small]);
   }
 
   function state(): CardState {
@@ -141,6 +190,7 @@ export function createGame({ encoder, species, now = () => new Date(), random = 
         if (built) break;
       }
       if (!built) throw new NotEnoughSpeciesError(request.size);
+      built.facts = await fetchFacts(built, onProgress);
 
       // Everything the photo check needs is ready before the Card replaces the current one.
       const vectors = await encodeLabels(built, onProgress);
@@ -152,6 +202,17 @@ export function createGame({ encoder, species, now = () => new Date(), random = 
     },
 
     hasCard: () => card !== null,
+
+    factFor: (taxon) => card?.facts?.[taxon.scientificName],
+
+    clue(index) {
+      const square = active().squares[index];
+      const facts = active().facts ?? {};
+      if (square.kind === "wildcard") return null;
+      const taxon =
+        square.kind === "species" ? square : active().localSpecies.find((t) => t.group === square.group);
+      return taxon ? { taxon, fact: facts[taxon.scientificName] } : null;
+    },
 
     loadCard(next) {
       const expected = next.size * next.size;

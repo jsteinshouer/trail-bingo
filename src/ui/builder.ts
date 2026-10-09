@@ -205,6 +205,11 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
         `<p class="hint">${progress.radiusKm > 10 ? `Not enough within 10 km, so looking within ${progress.radiusKm} km` : `Looking for what's been seen within ${progress.radiusKm} km`}
           from ${months}, in any year…</p>`,
       );
+    } else if (progress.step === "facts") {
+      const percent = progress.total ? Math.floor((progress.done / progress.total) * 100) : 0;
+      showStatus(`<p class="hint">Saving facts and photos for ${progress.total} local species, so you can read them with no signal.</p>
+        <div class="dl-bar" role="progressbar" aria-label="Facts saved" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div>
+        <p class="dl-label"><b>${progress.done}</b> of ${progress.total} species</p>`);
     } else {
       const percent = progress.total ? Math.floor((progress.done / progress.total) * 100) : 0;
       showStatus(`<p class="hint">Getting the photo check ready for ${progress.total} local species, so it works with no signal.</p>

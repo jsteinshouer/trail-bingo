@@ -66,6 +66,7 @@ describe("iNaturalist species source", () => {
       group: "plant",
       name: "Indiangrass",
       scientificName: "Sorghastrum nutans",
+      taxonId: 122608,
       observations: 13,
     });
     expect(find(species, "Cerioporus squamosus")).toMatchObject({ group: "fungus", name: "Dryad's Saddle", observations: 7 });
@@ -96,6 +97,7 @@ describe("iNaturalist species source", () => {
       group: "mammal",
       name: "Eastern Fox Squirrel",
       scientificName: "Sciurus niger",
+      taxonId: 46020,
       observations: 37,
     });
     expect(find(species, "Passer domesticus")?.group).toBe("bird");

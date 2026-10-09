@@ -160,6 +160,9 @@ export function generateCard(
     size,
     squares,
     // Every local species, chosen groups or not: the photo check compares Sightings with all of them.
-    localSpecies: local.map(({ group, name, scientificName }) => ({ group, name, scientificName })),
+    // Most observed first, so the first of a group is its best example.
+    localSpecies: [...local]
+      .sort((a, b) => b.observations - a.observations)
+      .map(({ observations: _, ...taxon }) => taxon),
   };
 }

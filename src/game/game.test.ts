@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGame, wildcardPosition, type Card, type CardSize, type Encoder, type SpeciesSource, type Square } from "./index";
+import { createGame, wildcardPosition, type Card, type CardSize, type Encoder, type FactSource, type SpeciesSource, type Square } from "./index";
 
 const species = (name: string): Square => ({
   kind: "species",
@@ -25,9 +25,10 @@ function card(size: CardSize): Card {
 // These tests never take a Sighting or build a Card, so the adapters are never really used.
 const encoder: Encoder = { encodeText: async (labels) => labels.map(() => new Float32Array(1)) };
 const noSpecies: SpeciesSource = { speciesNear: async () => [] };
+const noFacts: FactSource = { factsFor: async () => new Map() };
 
 function playing(size: CardSize) {
-  const game = createGame({ encoder, species: noSpecies });
+  const game = createGame({ encoder, species: noSpecies, facts: noFacts });
   game.loadCard(card(size));
   return game;
 }
@@ -208,7 +209,7 @@ describe("loading a Card", () => {
   it("rejects a Card whose Squares don't fill its grid", () => {
     const short = { ...card(3), squares: card(3).squares.slice(1) };
 
-    expect(() => createGame({ encoder, species: noSpecies }).loadCard(short)).toThrow(/9 Squares/);
+    expect(() => createGame({ encoder, species: noSpecies, facts: noFacts }).loadCard(short)).toThrow(/9 Squares/);
   });
 
   it("starts with no Squares marked", () => {

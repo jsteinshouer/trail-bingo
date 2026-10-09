@@ -36,6 +36,8 @@ export interface Taxon {
   /** Common name, or the scientific name when it has none. */
   name: string;
   scientificName: string;
+  /** The species source's ID for it, which the fact source looks it up by. */
+  taxonId?: number;
 }
 
 /** A species observed near a place, as a species source reports it. */
@@ -57,6 +59,28 @@ export interface SpeciesSource {
   speciesNear(query: SpeciesQuery): Promise<LocalSpecies[]>;
 }
 
+/** Something to learn about a taxon, stored with the Card so it works offline. */
+export interface Fact {
+  /** Two or three sentences, plain text. */
+  summary?: string;
+  /** Where the summary is from, to credit it. */
+  summarySource?: { name: string; url: string };
+  /** A reference photo of the taxon, and its credit. */
+  photo?: { image: Blob; credit: string };
+}
+
+/** Reference photos for the Card's own Squares are bigger than those for the rest of the local list. */
+export type PhotoSize = "small" | "medium";
+
+/** Where facts come from. */
+export interface FactSource {
+  /** Facts for each taxon it knows, by scientific name. `onProgress` gets how many taxa are done. */
+  factsFor(
+    taxa: Taxon[],
+    options: { photoSize: PhotoSize; onProgress?: (done: number) => void },
+  ): Promise<Map<string, Fact>>;
+}
+
 export interface Card {
   place: Place;
   /** Month the Card was built for, 1–12. */
@@ -71,6 +95,8 @@ export interface Card {
    * Square a Sighting fills.
    */
   localSpecies: Taxon[];
+  /** Facts for the Squares' species and the local species, by scientific name. */
+  facts?: Record<string, Fact>;
 }
 
 export type MarkedSquare = Square & {
