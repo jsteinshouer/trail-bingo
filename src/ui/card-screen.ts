@@ -13,8 +13,19 @@ import {
   kindOf,
 } from "./icons";
 import { mountSighting } from "./sighting";
-import { factCard, photoCredit, referencePhoto, releasePhotos } from "./fact-card";
-import { esc, looksLike, messageOf, monthName, namedTaxon, placeTitle, secondLine, theCard, withArticle } from "./text";
+import { factCard, photoCredit, photoUrl, referencePhoto, releasePhotos } from "./fact-card";
+import {
+  esc,
+  looksLike,
+  messageOf,
+  monthName,
+  namedTaxon,
+  placeTitle,
+  saveProblem,
+  secondLine,
+  theCard,
+  withArticle,
+} from "./text";
 
 const MARK_LABEL: Record<Mark, string> = { verified: "Verified", confirmed: "Confirmed" };
 const MARK_NOTE: Record<Mark, string> = {
@@ -41,8 +52,6 @@ export interface PhotoCheck {
 /** The on-trail Card screen: the sheet, its collars, Square detail, Sightings and celebrations. */
 export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: PhotoCheck, options: { onNewCard(): void }) {
   let cells: HTMLButtonElement[] = [];
-  /** Sighting photos (object URLs) by Square. Kept on the phone in ticket 09. */
-  const photos = new Map<number, string>();
   let openIndex: number | null = null;
   let lastFocus: HTMLElement | null = null;
 
@@ -70,6 +79,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
       </div>
       <div class="bingos"><output aria-live="polite">0</output><span data-bingo-word>Bingos</span></div>
     </footer>
+    <p class="problem save-problem" role="alert" hidden></p>
     <button class="sighting" type="button" data-take disabled>${ICON_CAMERA}<span class="label">Loading the photo check…</span></button>
     <div class="detail" hidden>
       <button class="scrim" type="button" tabindex="-1" aria-label="Close"></button>
@@ -84,11 +94,20 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
   const panel = $(".panel");
   const bingoCount = $("output");
   const take = $<HTMLButtonElement>("[data-take]");
+  const saveNotice = $(".save-problem");
 
   const sighting = mountSighting(root, game, {
     encodeImage: (image) => photoCheck.encodeImage(image),
-    onMarked(index, outcome, photo) {
-      photos.set(index, photo);
+    onMarked(index, outcome) {
+      // A Sighting that can't be kept on the phone says so; the Card still has it until the app closes.
+      game.saved().then(
+        () => (saveNotice.hidden = true),
+        (error) => {
+          saveNotice.textContent = `Your last Sighting couldn't be saved on this phone, so it will be lost if the app closes. ${saveProblem(error)}`;
+          saveNotice.title = messageOf(error);
+          saveNotice.hidden = false;
+        },
+      );
       const state = game.state();
       paint(state);
       restart(cells[index], "just");
@@ -121,8 +140,6 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
   /** Rebuilds the screen for the active Card. */
   function render() {
     hideDetail();
-    for (const url of photos.values()) URL.revokeObjectURL(url);
-    photos.clear();
     shownClues.clear();
     releasePhotos();
     // A new Card doesn't celebrate the old one.
@@ -172,7 +189,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
       if (square.mark) el.dataset.mark = square.mark;
       else delete el.dataset.mark;
       const shot = el.querySelector<HTMLImageElement>(".shot")!;
-      const photo = photos.get(i);
+      const photo = square.photo && photoUrl(square.photo);
       if (photo && shot.getAttribute("src") !== photo) shot.src = photo;
       el.toggleAttribute("data-photo", Boolean(photo));
       const status = square.mark ? MARK_LABEL[square.mark] : "not found yet";
@@ -294,7 +311,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     }
     if (square.mark) {
       // A marked Square is its fact card: the player's photo, how it was marked, then what it was.
-      const photo = photos.get(index);
+      const photo = square.photo && photoUrl(square.photo);
       const found = square.kind === "species" ? square : square.found;
       const status = `<div class="status ${square.mark}">${MARK_LABEL[square.mark]}<small>${MARK_NOTE[square.mark]}</small></div>`;
       body = found

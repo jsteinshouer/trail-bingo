@@ -1,22 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
+  ALL_GROUPS,
+  ELKHORN,
+  fakeEncoder,
+  fakeFacts,
+  fakeSpecies,
+  fakeStore,
+  observed,
+  photoOf,
+  PLENTY,
+  seeded,
+} from "./testing";
+import {
   createGame,
   NotEnoughSpeciesError,
-  VERIFIED_GAP,
-  type AnimalGroup,
   type BuildProgress,
   type CardGroup,
   type CardRequest,
   type CardSize,
-  type Encoder,
-  type Fact,
-  type FactSource,
-  type PhotoSize,
   type LocalSpecies,
   type MarkedSquare,
-  type SpeciesGroup,
-  type SpeciesQuery,
-  type SpeciesSource,
 } from "./index";
 
 /*
@@ -24,81 +27,6 @@ import {
  * are named after their group and rank ("tree 3" is the third most observed
  * tree), so a test can tell common from rare at a glance.
  */
-
-const ELKHORN = { name: "Elkhorn", region: "Nebraska", lat: 41.28, lng: -96.24 };
-const ALL_GROUPS: CardGroup[] = ["plant", "tree", "fungus", "animal"];
-const ANIMALS: AnimalGroup[] = ["mammal", "bird", "reptile", "amphibian", "butterfly-or-moth", "insect", "spider"];
-
-/** `n` species of a group, most observed first: "tree 1" has n observations, "tree n" has 1. */
-function observed(group: SpeciesGroup | AnimalGroup, n: number): LocalSpecies[] {
-  return Array.from({ length: n }, (_, i) => ({
-    group,
-    name: `${group} ${i + 1}`,
-    scientificName: `${group} sci ${i + 1}`,
-    observations: n - i,
-  }));
-}
-
-/** Plenty of everything. */
-const PLENTY = [
-  ...observed("plant", 40),
-  ...observed("tree", 40),
-  ...observed("fungus", 40),
-  ...ANIMALS.flatMap((g) => observed(g, 3)),
-];
-
-/** A species source with one list at 10 km and another at 25 km. */
-function fakeSpecies(near: LocalSpecies[], wider: LocalSpecies[] = near): SpeciesSource & { queries: SpeciesQuery[] } {
-  const queries: SpeciesQuery[] = [];
-  return {
-    queries,
-    async speciesNear(query) {
-      queries.push(query);
-      return query.radiusKm <= 10 ? near : wider;
-    },
-  };
-}
-
-/** Gives every label its own axis, so a photo can be aimed at any species. */
-function fakeEncoder(): Encoder & { labels: string[] } {
-  const labels: string[] = [];
-  return {
-    labels,
-    async encodeText(batch) {
-      return batch.map((label) => {
-        labels.push(label);
-        const v = new Float32Array(2048);
-        v[labels.length - 1] = 1;
-        return v;
-      });
-    },
-  };
-}
-
-/** A fact for every taxon it's asked about, recording which taxa were asked for at which photo size. */
-function fakeFacts(): FactSource & { asked: Map<PhotoSize, string[]>; fail?: Error } {
-  const asked = new Map<PhotoSize, string[]>();
-  const source: FactSource & { asked: Map<PhotoSize, string[]>; fail?: Error } = {
-    asked,
-    async factsFor(taxa, { photoSize, onProgress }) {
-      if (source.fail) throw source.fail;
-      asked.set(photoSize, [...(asked.get(photoSize) ?? []), ...taxa.map((t) => t.scientificName)]);
-      taxa.forEach((_, i) => onProgress?.(i + 1));
-      return new Map(taxa.map((t): [string, Fact] => [t.scientificName, { summary: `All about ${t.name}.` }]));
-    },
-  };
-  return source;
-}
-
-/** A small seeded random number generator (mulberry32), so builds are repeatable. */
-function seeded(seed: number) {
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 function setup(options: { near?: LocalSpecies[]; wider?: LocalSpecies[]; today?: Date; seed?: number } = {}) {
   const species = fakeSpecies(options.near ?? PLENTY, options.wider);
@@ -108,6 +36,7 @@ function setup(options: { near?: LocalSpecies[]; wider?: LocalSpecies[]; today?:
     encoder,
     species,
     facts,
+    store: fakeStore(),
     now: () => options.today ?? new Date(2026, 9, 8),
     random: seeded(options.seed ?? 1),
   });
@@ -381,12 +310,6 @@ describe("the photo check on a built Card", () => {
   });
 });
 
-/** A photo that's a sure match for one species and nothing else. */
-function photoOf(encoder: ReturnType<typeof fakeEncoder>, scientificName: string) {
-  const v = new Float32Array(2048);
-  v[encoder.labels.findIndex((label) => label.includes(`${scientificName},`))] = 0.3 + VERIFIED_GAP;
-  return v;
-}
 
 describe("progress while building", () => {
   it("reports the search, then encoding every label, ending with all of them", async () => {
@@ -421,7 +344,7 @@ describe("replacing a Card", () => {
 
   it("keeps the current Card and its marks when a new one can't be built", async () => {
     const species = fakeSpecies(PLENTY);
-    const game = createGame({ encoder: fakeEncoder(), species, facts: fakeFacts(), random: seeded(1) });
+    const game = createGame({ encoder: fakeEncoder(), species, facts: fakeFacts(), store: fakeStore(), random: seeded(1) });
     const first = await game.buildCard(request(3));
     game.mark(0, "verified");
 

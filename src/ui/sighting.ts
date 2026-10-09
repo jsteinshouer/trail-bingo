@@ -9,8 +9,8 @@ const PHOTO_SIDE = 768;
 export interface SightingOptions {
   /** Turns a Sighting photo into its vector with the photo check's image encoder. */
   encodeImage(image: Blob): Promise<Float32Array>;
-  /** A Sighting marked a Square. `photo` is an object URL the Card now owns. */
-  onMarked(index: number, outcome: MarkOutcome, photo: string): void;
+  /** A Sighting marked a Square; the Square now holds its photo. */
+  onMarked(index: number, outcome: MarkOutcome): void;
   /** Called when the overlay closes, so focus can go back to where it came from. */
   onClose(): void;
 }
@@ -49,8 +49,9 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
   const shutter = $<HTMLButtonElement>(".shutter");
 
   let stream: MediaStream | null = null;
-  /** The current Sighting's photo, until a Square takes it or it's thrown away. */
-  let photo: string | null = null;
+  /** The current Sighting's photo, and its preview while the photo check looks at it. */
+  let photo: Blob | null = null;
+  let preview: string | null = null;
   let open = false;
   /** The species each offered guess looks like, by Square, so a pick records it. */
   let guessTaxa = new Map<number, Taxon>();
@@ -91,7 +92,8 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
   }
 
   function discardPhoto() {
-    if (photo) URL.revokeObjectURL(photo);
+    if (preview) URL.revokeObjectURL(preview);
+    preview = null;
     photo = null;
   }
 
@@ -112,21 +114,23 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
   async function shoot() {
     if (!video.videoWidth) return;
     shutter.disabled = true;
-    let image: Blob;
+    let taken: Blob;
     try {
-      image = await takePhoto();
+      taken = await takePhoto();
     } catch (error) {
       return showError(error);
     }
     stopCamera();
-    photo = URL.createObjectURL(image);
-    still.src = photo;
+    photo = taken;
+    preview = URL.createObjectURL(taken);
+    still.src = preview;
     still.hidden = false;
     checking.hidden = false;
     shutter.hidden = true;
     show("");
     try {
-      const outcome = await game.sighting(await options.encodeImage(image));
+      // A sure match marks its Square with the photo.
+      const outcome = await game.sighting(await options.encodeImage(taken), taken);
       if (open) showOutcome(outcome);
     } catch (error) {
       if (open) showError(error);
@@ -189,12 +193,10 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
 
   const showError = (error: unknown) => showProblem("The photo check didn't work", messageOf(error));
 
-  /** Hands the photo to the Square and goes back to the Card. */
+  /** Goes back to the Card, where the marked Square now holds the photo. */
   function markWith(index: number, outcome: MarkOutcome) {
-    const taken = photo!;
-    photo = null;
     close();
-    options.onMarked(index, outcome, taken);
+    options.onMarked(index, outcome);
   }
 
   body.addEventListener("click", (event) => {
@@ -202,7 +204,7 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
     if (!button) return;
     if (button.dataset.pick !== undefined) {
       const index = Number(button.dataset.pick);
-      markWith(index, game.mark(index, "confirmed", guessTaxa.get(index)));
+      markWith(index, game.mark(index, "confirmed", { found: guessTaxa.get(index), photo: photo ?? undefined }));
     } else if ("retry" in button.dataset) {
       startCamera();
     } else if ("close" in button.dataset) {

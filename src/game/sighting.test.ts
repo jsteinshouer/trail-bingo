@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fakeStore } from "./testing";
 import { createGame, VERIFIED_GAP, type Card, type Encoder, type SightingOutcome, type FactSource, type SpeciesSource, type Square, type Taxon } from "./index";
 
 /*
@@ -85,7 +86,7 @@ const species: SpeciesSource = { speciesNear: async () => [] };
 const noFacts: FactSource = { factsFor: async () => new Map() };
 
 function playing(card: Card = CARD) {
-  const game = createGame({ encoder: fakeEncoder(), species, facts: noFacts });
+  const game = createGame({ encoder: fakeEncoder(), species, facts: noFacts, store: fakeStore() });
   game.loadCard(card);
   return game;
 }
@@ -137,7 +138,7 @@ describe("a Sighting the photo check isn't sure of", () => {
     const outcome = await game.sighting(photo({ "Celtis occidentalis": 0.33, "Ulmus americana": 0.32 }));
     if (outcome.kind !== "unsure") throw new Error(`expected unsure, got ${outcome.kind}`);
     const { index, taxon } = outcome.guesses[1];
-    game.mark(index, "confirmed", taxon);
+    game.mark(index, "confirmed", { found: taxon });
     expect(game.state().squares[3].mark).toBe("confirmed");
     expect(game.state().squares.filter((s) => s.mark)).toHaveLength(1);
   });
@@ -168,7 +169,7 @@ describe("a Sighting the photo check isn't sure of", () => {
       { index: 2, taxon: SQUIRREL },
       { index: 5, taxon: ROBIN },
     ]);
-    game.mark(2, "confirmed", outcome.guesses[0].taxon);
+    game.mark(2, "confirmed", { found: outcome.guesses[0].taxon });
     expect(game.state().squares[2]).toMatchObject({ mark: "confirmed", found: SQUIRREL });
   });
 });
@@ -252,7 +253,7 @@ describe("label encoding", () => {
     const flaky: Encoder = {
       encodeText: (labels) => (failures-- > 0 ? Promise.reject(new Error("out of memory")) : encoder.encodeText(labels)),
     };
-    const game = createGame({ encoder: flaky, species, facts: noFacts });
+    const game = createGame({ encoder: flaky, species, facts: noFacts, store: fakeStore() });
     game.loadCard(CARD);
     const sure = photo({ "Quercus macrocarpa": 0.33, "Celtis occidentalis": 0.33 - SURE });
     await expect(game.sighting(sure)).rejects.toThrow("out of memory");

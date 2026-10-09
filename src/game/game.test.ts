@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fakeStore } from "./testing";
 import { createGame, wildcardPosition, type Card, type CardSize, type Encoder, type FactSource, type SpeciesSource, type Square } from "./index";
 
 const species = (name: string): Square => ({
@@ -28,7 +29,7 @@ const noSpecies: SpeciesSource = { speciesNear: async () => [] };
 const noFacts: FactSource = { factsFor: async () => new Map() };
 
 function playing(size: CardSize) {
-  const game = createGame({ encoder, species: noSpecies, facts: noFacts });
+  const game = createGame({ encoder, species: noSpecies, facts: noFacts, store: fakeStore() });
   game.loadCard(card(size));
   return game;
 }
@@ -209,7 +210,7 @@ describe("loading a Card", () => {
   it("rejects a Card whose Squares don't fill its grid", () => {
     const short = { ...card(3), squares: card(3).squares.slice(1) };
 
-    expect(() => createGame({ encoder, species: noSpecies, facts: noFacts }).loadCard(short)).toThrow(/9 Squares/);
+    expect(() => createGame({ encoder, species: noSpecies, facts: noFacts, store: fakeStore() }).loadCard(short)).toThrow(/9 Squares/);
   });
 
   it("starts with no Squares marked", () => {
