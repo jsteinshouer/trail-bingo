@@ -37,6 +37,25 @@ export interface Taxon {
   scientificName: string;
 }
 
+/** A species observed near a place, as a species source reports it. */
+export interface LocalSpecies extends Taxon {
+  /** Research-grade observations in the radius and season window. */
+  observations: number;
+}
+
+export interface SpeciesQuery {
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  /** Months to count observations in, 1–12, across all years. */
+  months: number[];
+}
+
+/** Where a Card's species come from: what's been observed near a place this time of year. */
+export interface SpeciesSource {
+  speciesNear(query: SpeciesQuery): Promise<LocalSpecies[]>;
+}
+
 export interface Card {
   place: Place;
   /** Month the Card was built for, 1–12. */

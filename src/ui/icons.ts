@@ -21,10 +21,13 @@ const KIND_PATHS: Record<Kind, string> = {
 export const kindOf = (square: Exclude<Square, { kind: "wildcard" }>): Kind =>
   square.kind === "animal" ? "animal" : square.group;
 
+/** The legend symbol for a kind of living thing. */
+export const kindGlyph = (kind: Kind) =>
+  `<svg class="glyph" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${KIND_PATHS[kind]}</svg>`;
+
 /** The legend symbol for a Square: a kind glyph, or the triangulation station for the Wildcard. */
 export function glyph(square: Square): string {
-  if (square.kind === "wildcard") return TRIG;
-  return `<svg class="glyph" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${KIND_PATHS[kindOf(square)]}</svg>`;
+  return square.kind === "wildcard" ? TRIG : kindGlyph(kindOf(square));
 }
 
 const TRIG =
@@ -49,3 +52,14 @@ export const ICON_CAMERA =
 
 export const ICON_DOWNLOAD =
   '<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M13 3v13M7.5 10.5 13 16l5.5-5.5M4 18v4h18v-4"/></svg>';
+
+/** The Card menu: a map sheet's grid. */
+export const ICON_GRID =
+  '<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="16" height="16"/><path d="M3 9h16M3 15h16M9 3v16M15 3v16" stroke-width="1"/></svg>';
+
+export const ICON_READY =
+  '<svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 5 9.5 10.5 2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+
+/** "Use my location": a map's position mark. */
+export const ICON_LOCATE =
+  '<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6"/><circle cx="11" cy="11" r="1.6" fill="currentColor"/><path d="M11 1v4M11 17v4M1 11h4M17 11h4"/></svg>';
