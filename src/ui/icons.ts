@@ -43,3 +43,6 @@ export const ICON_CLOSE =
 
 export const ICON_IMPRINT =
   '<svg width="11" height="10" viewBox="0 0 16 14" aria-hidden="true"><path d="M8 1 15 13H1Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
+
+export const ICON_CAMERA =
+  '<svg width="28" height="24" viewBox="0 0 28 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M2 7h6l2.5-4h7L20 7h6v15H2Z"/><circle cx="14" cy="14" r="4.6"/></svg>';

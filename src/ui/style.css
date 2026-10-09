@@ -135,9 +135,19 @@ button { font: inherit; color: inherit; }
   transition: opacity .2s, color .3s;
 }
 .sq:active .glyph { opacity: 1; }
-/* Marked, until Sightings bring photos (ticket 03): the symbol is overprinted in purple */
+/* Marked: the player's Sighting photo develops onto the Square */
+.sq .shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+.sq[data-photo] .shot { display: block; }
+.sq[data-photo] .glyph { display: none; }
+.sq.just .shot { animation: develop .7s var(--ease-out) both; }
+@keyframes develop {
+  from { clip-path: inset(50% 50% 50% 50%); filter: saturate(0) brightness(1.4); }
+  60%  { filter: saturate(.6) brightness(1.1); }
+  to   { clip-path: inset(0 0 0 0); filter: none; }
+}
+/* A mark without a photo: the symbol is overprinted in purple */
 .sq[data-mark] .glyph { color: var(--purple-ink); opacity: 1; }
-.sq[data-mark="confirmed"] .ph { background: var(--hatch); }
+.sq[data-mark="confirmed"]:not([data-photo]) .ph { background: var(--hatch); }
 
 .sq .nm {
   flex: 0 0 auto;
@@ -205,7 +215,7 @@ button { font: inherit; color: inherit; }
 /* Bottom collar: scale-bar progress + Bingo count */
 .collar-bottom {
   display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 12px;
-  padding: 8px var(--gutter) calc(12px + env(safe-area-inset-bottom));
+  padding: 8px var(--gutter) 12px;
 }
 .scale { min-width: 0; }
 .scale-bar { display: flex; height: 8px; border: 1.5px solid var(--ink); }
@@ -265,18 +275,83 @@ button { font: inherit; color: inherit; }
 .status.confirmed { background: var(--hatch), var(--paper); color: var(--purple-ink); border: 1.5px solid var(--purple); }
 .status small { display: block; font: 400 14px/1.3 var(--face-text); letter-spacing: 0; opacity: .9; }
 
-/* Temporary developer control (removed in ticket 03): deliberately off-world */
-.dev {
-  margin-top: 16px; padding: 10px 12px 12px;
-  border: 1.5px dashed #b36b00; background: #fff8ec;
+.photo { position: relative; margin-top: 16px; aspect-ratio: 1 / 1; border: 1.5px solid var(--ink); overflow: hidden; }
+.photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* ── Take a Sighting: a printed purple band at the thumb ──────── */
+.sighting {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  width: 100%; flex: 0 0 auto;
+  height: calc(68px + env(safe-area-inset-bottom));
+  margin: 0; border: 0; border-radius: 0;
+  padding: 0 var(--gutter) env(safe-area-inset-bottom);
+  background: var(--purple); color: var(--paper);
+  font: 700 21px/1 var(--face-label); letter-spacing: .03em;
+  cursor: pointer;
+  transition: background .15s;
 }
-.dev p { margin: 0 0 8px; font: 700 12px/1.2 var(--face-label); letter-spacing: .1em; text-transform: uppercase; color: #8a5200; }
-.dev .row { display: flex; flex-wrap: wrap; gap: 8px; }
-.dev button {
-  min-height: 44px; padding: 0 12px; cursor: pointer;
+.sighting:hover { background: #6c2a83; }
+.sighting:active { background: var(--purple-ink); }
+.sighting:focus-visible { outline-offset: -5px; outline-color: var(--paper); }
+/* Waiting on the photo check: the band is printed but not yet inked */
+.sighting:disabled { background: var(--hatch), #efe8f2; color: var(--purple-ink); cursor: default; font-size: 17px; }
+.sighting svg { flex: 0 0 auto; }
+
+/* ── The camera: a square viewfinder framed like a map inset ──── */
+.camera {
+  position: absolute; inset: 0; z-index: 8;
+  display: flex; flex-direction: column;
+  background: var(--paper);
+  animation: fade .2s ease-out;
+}
+.camera-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: calc(14px + env(safe-area-inset-top)) var(--gutter) 10px;
+}
+.camera-head h2 { margin: 0; font: 700 28px/1 var(--face-label); letter-spacing: .01em; text-transform: uppercase; }
+.camera-head .close { margin: 0 -10px 0 0; }
+.finder {
+  position: relative; flex: 0 0 auto;
+  width: min(100% - 2 * var(--gutter), 52svh); aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  border: 1.5px solid var(--ink);
+  background: var(--ink);
+  overflow: hidden;
+}
+.finder video, .finder img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.finder .checking {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 10px 12px;
+  background: var(--purple); color: var(--paper);
+  font: 600 17px/1.2 var(--face-label); letter-spacing: .02em;
+}
+.finder .checking::after { content: ""; display: block; height: 3px; margin-top: 8px; background: linear-gradient(90deg, var(--paper) 0 30%, transparent 30%); background-size: 200% 100%; animation: scan 1.1s linear infinite; }
+@keyframes scan { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.camera-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px var(--gutter) 16px; }
+.camera-body h3 { margin: 12px 0 0; font: 700 24px/1.05 var(--face-label); letter-spacing: .005em; }
+.camera-body .hint { margin-top: 8px; }
+.camera-body .hint i { color: var(--contour-ink); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.btn {
+  flex: 1 1 140px;
+  min-height: 52px; padding: 0 16px; cursor: pointer;
   background: var(--paper); border: 1.5px solid var(--ink);
-  font: 600 15px/1 var(--face-label); letter-spacing: .03em;
+  font: 700 18px/1 var(--face-label); letter-spacing: .03em;
 }
+.btn:hover { background: #f1f6ec; }
+
+/* Top guesses: legend entries to pick from */
+.guesses { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.guess {
+  display: grid; grid-template-columns: 36px 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center;
+  width: 100%; min-height: 62px; padding: 8px 12px; cursor: pointer; text-align: left;
+  background: var(--wood); border: 1.5px solid var(--ink);
+}
+.guess .glyph { grid-row: 1 / 3; width: 32px; height: 32px; color: var(--contour-ink); }
+.guess .name { font: 600 20px/1.1 var(--face-label); }
+.guess .second { font: italic 400 13.5px/1.25 var(--face-text); color: var(--contour-ink); }
+.guess:hover { background: #c6e0b1; }
+.guess:active { background: var(--purple); color: var(--paper); }
 
 /* ── Celebrations: printed revision stamps ────────────────────── */
 .stamp {

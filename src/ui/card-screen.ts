@@ -1,25 +1,13 @@
-import type { AnimalGroup, CardState, Game, Mark, MarkedSquare, MarkOutcome } from "../game";
-import { devMarkControl } from "./dev-mark-control";
-import { glyph, ICON_CLOSE, ICON_CONFIRMED, ICON_IMPRINT, ICON_VERIFIED, KIND_LABEL, kindOf } from "./icons";
-
-const ANIMAL_ANY: Record<AnimalGroup, string> = {
-  mammal: "any mammal",
-  bird: "any bird",
-  reptile: "any reptile",
-  amphibian: "any amphibian",
-  "butterfly-or-moth": "any butterfly or moth",
-  insect: "any insect",
-  spider: "any spider",
-};
+import type { CardState, Game, Mark, MarkedSquare, MarkOutcome } from "../game";
+import { glyph, ICON_CAMERA, ICON_CLOSE, ICON_CONFIRMED, ICON_IMPRINT, ICON_VERIFIED, KIND_LABEL, kindOf } from "./icons";
+import { mountSighting } from "./sighting";
+import { esc, messageOf, secondLine } from "./text";
 
 const MARK_LABEL: Record<Mark, string> = { verified: "Verified", confirmed: "Confirmed" };
 const MARK_NOTE: Record<Mark, string> = {
   verified: "The photo check was sure.",
   confirmed: "You picked it from the top guesses.",
 };
-
-const esc = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 const monthName = (month: number) => new Date(2000, month - 1).toLocaleString("en", { month: "long" });
 
@@ -31,14 +19,19 @@ function dm(value: number): string {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-export interface CardScreenOptions {
-  /** Dev only (ticket 02): reload the demo Card with nothing marked. */
-  onStartOver(): void;
+/** The photo check's image side, as the Card screen needs it. */
+export interface PhotoCheck {
+  /** Settles when the photo check is ready to take Sightings, or failed to load. */
+  ready: Promise<unknown>;
+  onProgress?: (message: string) => void;
+  encodeImage(image: Blob): Promise<Float32Array>;
 }
 
-/** The on-trail Card screen: the sheet, its collars, Square detail and celebrations. */
-export function mountCardScreen(root: HTMLElement, game: Game, options: CardScreenOptions) {
+/** The on-trail Card screen: the sheet, its collars, Square detail, Sightings and celebrations. */
+export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: PhotoCheck) {
   let cells: HTMLButtonElement[] = [];
+  /** Sighting photos (object URLs) by Square. Kept on the phone in ticket 09. */
+  const photos = new Map<number, string>();
   let openIndex: number | null = null;
   let lastFocus: HTMLElement | null = null;
 
@@ -65,6 +58,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, options: CardScre
       </div>
       <div class="bingos"><output aria-live="polite">0</output><span data-bingo-word>Bingos</span></div>
     </footer>
+    <button class="sighting" type="button" data-take disabled>${ICON_CAMERA}<span class="label">Loading the photo check…</span></button>
     <div class="detail" hidden>
       <button class="scrim" type="button" tabindex="-1" aria-label="Close"></button>
       <section class="panel" role="dialog" aria-modal="true" aria-labelledby="detail-name"></section>
@@ -77,10 +71,41 @@ export function mountCardScreen(root: HTMLElement, game: Game, options: CardScre
   const detail = $(".detail");
   const panel = $(".panel");
   const bingoCount = $("output");
+  const take = $<HTMLButtonElement>("[data-take]");
+
+  const sighting = mountSighting(root, game, {
+    encodeImage: (image) => photoCheck.encodeImage(image),
+    onMarked(index, outcome, photo) {
+      photos.set(index, photo);
+      const state = game.state();
+      paint(state);
+      restart(cells[index], "just");
+      drawRoutes(state, new Set(outcome.newBingos.map(String)));
+      celebrate(state, outcome);
+    },
+    onClose: () => take.focus(),
+  });
+  take.addEventListener("click", sighting.open);
+
+  // The band says what the photo check is doing until it's ready for Sightings.
+  const takeLabel = take.querySelector(".label")!;
+  photoCheck.onProgress = (message) => (takeLabel.textContent = message);
+  photoCheck.ready.then(
+    () => {
+      takeLabel.textContent = "Take a Sighting";
+      take.disabled = false;
+    },
+    (error) => {
+      takeLabel.textContent = "The photo check couldn't load";
+      take.title = messageOf(error);
+    },
+  );
 
   /** Rebuilds the screen for the active Card. */
   function render() {
     hideDetail();
+    for (const url of photos.values()) URL.revokeObjectURL(url);
+    photos.clear();
     const state = game.state();
     const { place, month, size } = state;
     const dLat = place.radiusKm / 111;
@@ -102,7 +127,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, options: CardScre
       b.type = "button";
       b.className = square.kind === "wildcard" ? "sq wild" : "sq";
       b.innerHTML =
-        `<span class="ph">${glyph(square)}</span>` +
+        `<span class="ph">${glyph(square)}<img class="shot" alt=""></span>` +
         (square.kind === "wildcard"
           ? '<span class="nm">Wildcard<span class="sub"></span></span>'
           : `<span class="nm">${esc(square.name)}</span><span class="sci"></span>`) +
@@ -122,13 +147,16 @@ export function mountCardScreen(root: HTMLElement, game: Game, options: CardScre
       const el = cells[i];
       if (square.mark) el.dataset.mark = square.mark;
       else delete el.dataset.mark;
+      const shot = el.querySelector<HTMLImageElement>(".shot")!;
+      const photo = photos.get(i);
+      if (photo && shot.getAttribute("src") !== photo) shot.src = photo;
+      el.toggleAttribute("data-photo", Boolean(photo));
       const status = square.mark ? MARK_LABEL[square.mark] : "not found yet";
       if (square.kind === "wildcard") {
         el.querySelector(".sub")!.textContent = square.mark ? "filled" : "anything living";
         el.setAttribute("aria-label", `Wildcard, ${square.mark ? "filled" : "anything living"}, ${status}`);
       } else {
-        el.querySelector(".sci")!.textContent =
-          square.kind === "animal" ? ANIMAL_ANY[square.group] : square.scientificName;
+        el.querySelector(".sci")!.textContent = secondLine(square);
         el.setAttribute("aria-label", `${square.name}, ${status}`);
       }
     });
@@ -143,15 +171,6 @@ export function mountCardScreen(root: HTMLElement, game: Game, options: CardScre
       restart(bingoCount, "bump");
     }
     $("[data-bingo-word]").textContent = state.bingoCount === 1 ? "Bingo" : "Bingos";
-  }
-
-  function mark(index: number, which: Mark) {
-    const outcome = game.mark(index, which);
-    const state = game.state();
-    paint(state);
-    restart(cells[index], "just");
-    drawRoutes(state, new Set(outcome.newBingos.map(String)));
-    celebrate(state, outcome);
   }
 
   /* ── Celebrations ─────────────────────────────────────────────── */
@@ -236,26 +255,16 @@ export function mountCardScreen(root: HTMLElement, game: Game, options: CardScre
       meta = `<i>${esc(square.scientificName)}</i> · ${KIND_LABEL[kindOf(square)]}`;
     }
     if (square.mark) {
-      body = `<div class="status ${square.mark}">${MARK_LABEL[square.mark]}<small>${MARK_NOTE[square.mark]}</small></div>`;
+      const photo = photos.get(index);
+      body =
+        (photo ? `<div class="photo"><img src="${photo}" alt="Your Sighting of ${esc(name)}"></div>` : "") +
+        `<div class="status ${square.mark}">${MARK_LABEL[square.mark]}<small>${MARK_NOTE[square.mark]}</small></div>`;
     }
 
     panel.innerHTML = `<div class="panel-head${square.kind === "wildcard" ? " wild" : ""}">${glyph(square)}
         <div><h2 id="detail-name">${esc(name)}</h2><p class="meta">${meta}</p></div>
         <button class="close" type="button" aria-label="Close">${ICON_CLOSE}</button></div>${body}`;
     panel.querySelector(".close")!.addEventListener("click", closeDetail);
-    panel.appendChild(
-      devMarkControl({
-        canMark: !square.mark,
-        onMark: (which) => {
-          closeDetail();
-          mark(index, which);
-        },
-        onStartOver: () => {
-          closeDetail();
-          options.onStartOver();
-        },
-      }),
-    );
   }
 
   $(".scrim").addEventListener("click", closeDetail);

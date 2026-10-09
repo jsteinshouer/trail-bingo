@@ -9,11 +9,17 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "models": "mkdir -p public/models && for f in manifest.json tokenizer.json tokenizer_config.json image_encoder_fp16.onnx text_encoder_fp16.onnx; do ln -sf ../../spike/web/public/models/$f public/models/$f; done"
   },
   "devDependencies": {
+    "@webgpu/types": "^0.1.74",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.3"
+  },
+  "dependencies": {
+    "@huggingface/tokenizers": "^0.2.0",
+    "onnxruntime-web": "^1.30.0"
   }
 }

@@ -29,6 +29,14 @@ export interface Place {
   radiusKm: number;
 }
 
+/** A living thing the photo check can recognize. */
+export interface Taxon {
+  group: SpeciesGroup | AnimalGroup;
+  /** Common name. */
+  name: string;
+  scientificName: string;
+}
+
 export interface Card {
   place: Place;
   /** Month the Card was built for, 1–12. */
@@ -36,6 +44,13 @@ export interface Card {
   size: CardSize;
   /** Squares in reading order, row by row. */
   squares: Square[];
+  /**
+   * Other species observed nearby. The photo check compares a Sighting with
+   * these as well as the Card's species Squares, so a Sighting of something
+   * off the Card isn't forced onto it. Local animals also decide which broad animal
+   * Square a Sighting fills.
+   */
+  localSpecies: Taxon[];
 }
 
 export type MarkedSquare = Square & { mark?: Mark };
@@ -59,3 +74,14 @@ export interface MarkOutcome {
   /** This mark filled the last open Square. */
   blackout: boolean;
 }
+
+/** What a Sighting turned out to be. */
+export type SightingOutcome =
+  /** The photo check was sure, and marked the Square as Verified. */
+  | { kind: "verified"; index: number; taxon: Taxon; mark: MarkOutcome }
+  /** The photo check was sure, but the Square was already marked. Nothing changed. */
+  | { kind: "already-marked"; index: number; taxon: Taxon }
+  /** The photo check wasn't sure. Its top open Squares, best first, for the player to pick from. */
+  | { kind: "unsure"; guesses: number[] }
+  /** The photo check was sure it's a local species that isn't on the Card. */
+  | { kind: "not-on-card"; taxon: Taxon };
