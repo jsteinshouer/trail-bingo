@@ -106,18 +106,23 @@ describe("iNaturalist species source", () => {
     expect(find(species, "Platycryptus undatus")?.group).toBe("spider");
   });
 
-  it("leaves out species with no common name, and animals outside the Card's groups", async () => {
+  it("names a species with no common name by its scientific name", async () => {
     const plants = structuredClone(plantsFungi);
     delete (plants.results[0].taxon as { preferred_common_name?: string }).preferred_common_name;
+    const { species } = await speciesFrom(ok(plants));
+
+    expect(find(species, "Sorghastrum nutans")).toMatchObject({ name: "Sorghastrum nutans", group: "plant" });
+  });
+
+  it("leaves out animals outside the Card's groups", async () => {
     const critters = structuredClone(animals);
     // A harvestman: an arachnid, but not a spider.
     critters.results[0].taxon.ancestor_ids = [48460, 1, 47120, 245097, 47119, 47367];
     critters.results[0].taxon.iconic_taxon_name = "Arachnida";
-    const { species } = await speciesFrom(ok(plants), ok(critters));
+    const { species } = await speciesFrom(ok(empty), ok(critters));
 
-    expect(find(species, plantsFungi.results[0].taxon.name)).toBeUndefined();
     expect(find(species, animals.results[0].taxon.name)).toBeUndefined();
-    expect(species).toHaveLength(48);
+    expect(species).toHaveLength(24);
   });
 
   it("returns nothing when nothing has been observed nearby", async () => {

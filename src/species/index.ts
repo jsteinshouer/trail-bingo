@@ -69,9 +69,10 @@ export function createInatSpeciesSource({ fetch }: { fetch: typeof globalThis.fe
       const counts = (await Promise.all(ICONIC_TAXA.map((iconic) => speciesCounts(query, iconic)))).flat();
       return counts.flatMap(({ count, taxon }) => {
         const group = groupOf(taxon.ancestor_ids);
-        // Squares need a name a kid can read; arachnids other than spiders don't fill any Square.
-        if (!group || !taxon.preferred_common_name) return [];
-        return [{ group, name: capitalize(taxon.preferred_common_name), scientificName: taxon.name, observations: count }];
+        // Arachnids other than spiders don't fill any Square.
+        if (!group) return [];
+        const name = taxon.preferred_common_name ? capitalize(taxon.preferred_common_name) : taxon.name;
+        return [{ group, name, scientificName: taxon.name, observations: count }];
       });
     },
   };

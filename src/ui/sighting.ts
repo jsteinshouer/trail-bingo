@@ -1,4 +1,4 @@
-import type { Game, MarkOutcome, SightingOutcome } from "../game";
+import type { Game, MarkOutcome, SightingOutcome, Taxon } from "../game";
 import { glyph, ICON_CAMERA, ICON_CLOSE } from "./icons";
 import { esc, messageOf, secondLine } from "./text";
 
@@ -148,7 +148,7 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
           <div class="actions">${done}${again}</div>`);
       case "not-on-card":
         return show(`<h3>Not on your Card</h3>
-          <p class="hint">This looks like ${esc(outcome.taxon.name)} (<i>${esc(outcome.taxon.scientificName)}</i>).</p>
+          <p class="hint">This looks like ${namedTaxon(outcome.taxon)}.</p>
           <div class="actions">${done}${again}</div>`);
       case "unsure":
         return show(`<h3>Which one is it?</h3>
@@ -223,6 +223,11 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
   });
 
   return { open: openCamera };
+}
+
+/** A taxon's common name with its scientific name, or the scientific name alone when it has no common name. */
+function namedTaxon({ name, scientificName }: Taxon): string {
+  return name === scientificName ? `<i>${esc(name)}</i>` : `${esc(name)} (<i>${esc(scientificName)}</i>)`;
 }
 
 function cameraProblem(error: unknown): string {

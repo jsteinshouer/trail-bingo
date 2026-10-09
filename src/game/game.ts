@@ -31,8 +31,8 @@ export interface GameAdapters {
 
 /** How a Card build is going. */
 export type BuildProgress =
-  /** Asking what's been seen within this radius. */
-  | { step: "species"; radiusKm: number }
+  /** Asking what's been seen within this radius, in these months of any year. */
+  | { step: "species"; radiusKm: number; months: number[] }
   /** Encoding the local species' labels for the photo check. */
   | { step: "labels"; done: number; total: number };
 
@@ -121,11 +121,12 @@ export function createGame({ encoder, species, now = () => new Date(), random = 
     async buildCard(request, onProgress) {
       if (!request.groups.length) throw new Error("Choose at least one group for the Card");
       const month = now().getMonth() + 1;
+      const months = seasonMonths(month);
       let built: Card | null = null;
       for (const radiusKm of SEARCH_RADII_KM) {
-        onProgress?.({ step: "species", radiusKm });
+        onProgress?.({ step: "species", radiusKm, months });
         const { lat, lng } = request.place;
-        const local = await species.speciesNear({ lat, lng, radiusKm, months: seasonMonths(month) });
+        const local = await species.speciesNear({ lat, lng, radiusKm, months });
         built = generateCard(local, request, month, radiusKm, random);
         if (built) break;
       }

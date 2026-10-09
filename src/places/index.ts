@@ -55,12 +55,15 @@ export class LocationError extends Error {
   }
 }
 
-/** The device's location. A rough fix is plenty for a 10 km search area. */
+/** About 1 km: plenty for a 10 km search area, and no more precise than that leaves the phone. */
+const roughly = (degrees: number) => Math.round(degrees * 100) / 100;
+
+/** The device's location, rounded: a rough fix is all a Card needs. */
 export function currentPosition(): Promise<{ lat: number; lng: number }> {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) return reject(new LocationError("This browser can't share your location."));
     navigator.geolocation.getCurrentPosition(
-      ({ coords }) => resolve({ lat: coords.latitude, lng: coords.longitude }),
+      ({ coords }) => resolve({ lat: roughly(coords.latitude), lng: roughly(coords.longitude) }),
       (error) =>
         reject(
           new LocationError(

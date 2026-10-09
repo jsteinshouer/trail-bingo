@@ -69,7 +69,8 @@ function pools(local: LocalSpecies[], groups: CardGroup[]): Map<CardGroup, Squar
         const animals = (Object.keys(ANIMAL_NAMES) as AnimalGroup[]).filter((g) => seen.has(g));
         return [group, animals.map((g) => ({ kind: "animal", group: g, name: ANIMAL_NAMES[g] }))];
       }
-      const species = byCount.filter((s) => s.group === group);
+      // A Square needs a name a kid can read, so species known only by their scientific name stay off.
+      const species = byCount.filter((s) => s.group === group && s.name !== s.scientificName);
       return [group, species.map(({ name, scientificName }) => ({ kind: "species", group, name, scientificName }))];
     }),
   );
@@ -93,15 +94,42 @@ function shares(pools: Map<CardGroup, Square[]>, needed: number): Map<CardGroup,
   return share;
 }
 
+const commonHalf = (pool: Square[]) => pool.slice(0, Math.ceil(pool.length / 2));
+
 /**
- * About two-thirds from the more observed half of the group, one-third from
- * the rest: some quick early finds and some real challenges.
+ * How many of each species group's Squares come from its less observed half:
+ * about a third of all the species Squares, spread across the groups. Counted
+ * across the whole Card, so groups with only a couple of Squares each still
+ * add up to some real challenges.
  */
-function pickSpecies(pool: Square[], n: number, random: () => number): Square[] {
-  const common = pool.slice(0, Math.ceil(pool.length / 2));
-  const rarer = pool.slice(common.length);
-  const fromRarer = Math.max(Math.min(Math.floor(n / 3), rarer.length), n - common.length);
-  return [...sample(common, n - fromRarer, random), ...sample(rarer, fromRarer, random)];
+function rarerShares(available: Map<CardGroup, Square[]>, share: Map<CardGroup, number>): Map<CardGroup, number> {
+  const groups = [...share.keys()].filter((group) => group !== "animal");
+  const rarer = new Map(groups.map((group) => [group, 0]));
+  // A group must take from its rarer half when its common half is too small.
+  for (const group of groups) {
+    rarer.set(group, Math.max(0, share.get(group)! - commonHalf(available.get(group)!).length));
+  }
+  const total = groups.reduce((sum, group) => sum + share.get(group)!, 0);
+  let wanted = Math.round(total / 3) - [...rarer.values()].reduce((a, b) => a + b, 0);
+  while (wanted > 0) {
+    const before = wanted;
+    for (const group of groups) {
+      const pool = available.get(group)!;
+      const room = Math.min(share.get(group)!, pool.length - commonHalf(pool).length);
+      if (wanted > 0 && rarer.get(group)! < room) {
+        rarer.set(group, rarer.get(group)! + 1);
+        wanted--;
+      }
+    }
+    if (wanted === before) break;
+  }
+  return rarer;
+}
+
+/** Some quick early finds from the more observed half of the group, and some real challenges from the rest. */
+function pickSpecies(pool: Square[], n: number, fromRarer: number, random: () => number): Square[] {
+  const common = commonHalf(pool);
+  return [...sample(common, n - fromRarer, random), ...sample(pool.slice(common.length), fromRarer, random)];
 }
 
 /** A Card from the species seen near the place, or null if they can't fill it. */
@@ -117,8 +145,11 @@ export function generateCard(
   const share = shares(available, size * size - 1);
   if (!share) return null;
 
+  const rarer = rarerShares(available, share);
   const picked = [...available].flatMap(([group, pool]) =>
-    group === "animal" ? sample(pool, share.get(group)!, random) : pickSpecies(pool, share.get(group)!, random),
+    group === "animal"
+      ? sample(pool, share.get(group)!, random)
+      : pickSpecies(pool, share.get(group)!, rarer.get(group)!, random),
   );
   const squares = sample(picked, picked.length, random);
   squares.splice(wildcardPosition(size, random), 0, { kind: "wildcard" });

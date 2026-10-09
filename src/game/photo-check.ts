@@ -13,8 +13,11 @@ export interface Encoder {
   encodeText(labels: string[]): Promise<Float32Array[]>;
 }
 
-/** BioCLIP's label form: scientific name and common name. */
-export const label = (taxon: Taxon) => `a photo of ${taxon.scientificName}, ${taxon.name}.`;
+/** BioCLIP's label form: scientific name and common name, or the scientific name alone when there's no common name. */
+export const label = (taxon: Taxon) =>
+  taxon.name === taxon.scientificName
+    ? `a photo of ${taxon.scientificName}.`
+    : `a photo of ${taxon.scientificName}, ${taxon.name}.`;
 
 /** A species the photo check can match, and the Square it fills (null when it isn't on the Card). */
 export interface Candidate {

@@ -10,6 +10,7 @@ import {
   type CardSize,
   type Encoder,
   type LocalSpecies,
+  type MarkedSquare,
   type SpeciesGroup,
   type SpeciesQuery,
   type SpeciesSource,
@@ -95,7 +96,7 @@ function setup(options: { near?: LocalSpecies[]; wider?: LocalSpecies[]; today?:
 
 const request = (size: CardSize, groups: CardGroup[] = ALL_GROUPS): CardRequest => ({ place: ELKHORN, size, groups });
 
-const groupOf = (square: ReturnType<ReturnType<typeof createGame>["state"]>["squares"][number]) =>
+const groupOf = (square: MarkedSquare) =>
   square.kind === "wildcard" ? "wildcard" : square.kind === "animal" ? "animal" : square.group;
 
 describe("building a Card", () => {
@@ -216,6 +217,46 @@ describe("common and rarer species", () => {
   });
 });
 
+describe("rarer species on a Card with several groups", () => {
+  it("are about a third of all the species Squares, even when each group has only a couple", async () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const card = await setup({ seed }).game.buildCard(request(3));
+
+      const ranks = card.squares.flatMap((s) => (s.kind === "species" ? [Number(s.name.split(" ")[1])] : []));
+      expect(ranks).toHaveLength(6);
+      expect(ranks.filter((rank) => rank > 20)).toHaveLength(2);
+    }
+  });
+});
+
+describe("species with no common name", () => {
+  // The species source names these by their scientific name.
+  const unnamed = (group: "plant" | "insect", n: number): LocalSpecies[] =>
+    Array.from({ length: n }, (_, i) => ({ group, name: `${group} unnamed ${i}`, scientificName: `${group} unnamed ${i}`, observations: 99 }));
+
+  it("never name a Square", async () => {
+    const near = [...unnamed("plant", 30), ...observed("plant", 10)];
+    const card = await setup({ near }).game.buildCard(request(3, ["plant"]));
+
+    expect(card.squares.filter((s) => s.kind === "species" && s.name.includes("unnamed"))).toEqual([]);
+  });
+
+  it("are still compared with Sightings, labelled by scientific name alone", async () => {
+    const near = [...unnamed("plant", 1), ...observed("plant", 10)];
+    const { game, encoder } = setup({ near });
+    await game.buildCard(request(3, ["plant"]));
+
+    expect(encoder.labels).toContain("a photo of plant unnamed 0.");
+  });
+
+  it("still count toward offering their animal group", async () => {
+    const near = [...observed("tree", 30), ...unnamed("insect", 2)];
+    const card = await setup({ near }).game.buildCard(request(3, ["tree", "animal"]));
+
+    expect(card.squares.some((s) => s.kind === "animal" && s.group === "insect")).toBe(true);
+  });
+});
+
 describe("the season window", () => {
   it.each([
     [new Date(2026, 9, 8), [9, 10, 11]],
@@ -327,8 +368,8 @@ describe("progress while building", () => {
     const log: BuildProgress[] = [];
     await game.buildCard(request(3, ["tree"]), (p) => log.push(p));
 
-    expect(log[0]).toEqual({ step: "species", radiusKm: 10 });
-    expect(log[1]).toEqual({ step: "species", radiusKm: 25 });
+    expect(log[0]).toEqual({ step: "species", radiusKm: 10, months: [9, 10, 11] });
+    expect(log[1]).toEqual({ step: "species", radiusKm: 25, months: [9, 10, 11] });
     const labels = log.filter((p) => p.step === "labels");
     expect(labels.length).toBeGreaterThan(1);
     expect(labels.at(-1)).toEqual({ step: "labels", done: 100, total: 100 });

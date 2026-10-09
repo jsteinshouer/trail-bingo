@@ -32,7 +32,7 @@ export interface Place {
 /** A living thing the photo check can recognize. */
 export interface Taxon {
   group: SpeciesGroup | AnimalGroup;
-  /** Common name. */
+  /** Common name, or the scientific name when it has none. */
   name: string;
   scientificName: string;
 }

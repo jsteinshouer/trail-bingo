@@ -12,15 +12,13 @@ import {
   kindOf,
 } from "./icons";
 import { mountSighting } from "./sighting";
-import { esc, messageOf, secondLine } from "./text";
+import { esc, messageOf, monthName, secondLine } from "./text";
 
 const MARK_LABEL: Record<Mark, string> = { verified: "Verified", confirmed: "Confirmed" };
 const MARK_NOTE: Record<Mark, string> = {
   verified: "The photo check was sure.",
   confirmed: "You picked it from the top guesses.",
 };
-
-const monthName = (month: number) => new Date(2000, month - 1).toLocaleString("en", { month: "long" });
 
 /** Degrees and minutes, as printed in a quad's corners. */
 function dm(value: number): string {
@@ -125,7 +123,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     const dLng = place.radiusKm / (111 * Math.cos((place.lat * Math.PI) / 180));
 
     $("[data-place]").textContent = place.name;
-    // Everything the Card needs is on the phone once it's built.
+    // A built Card needs no signal to play. Keeping it across restarts is ticket 09.
     $("[data-meta]").innerHTML =
       `${[place.region, monthName(month)].filter(Boolean).map(esc).join(" · ")}<br>` +
       `<span class="ready">${ICON_READY}Ready offline</span>`;

@@ -1,7 +1,7 @@
 import { NotEnoughSpeciesError, type BuildProgress, type CardGroup, type CardSize, type Game } from "../game";
 import type { PlaceName } from "../places";
 import { ICON_CLOSE, ICON_LOCATE, kindGlyph } from "./icons";
-import { esc, messageOf } from "./text";
+import { esc, messageOf, monthName } from "./text";
 
 const SIZES: { size: CardSize; note: string }[] = [
   { size: 3, note: "A short walk" },
@@ -15,8 +15,6 @@ const GROUPS: { group: CardGroup; label: string }[] = [
   { group: "fungus", label: "Fungi and lichens" },
   { group: "animal", label: "Animals" },
 ];
-
-const monthName = (month: number) => new Date(2000, month - 1).toLocaleString("en", { month: "long" });
 
 export interface BuilderOptions {
   /** The device's location. */
@@ -131,8 +129,7 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
 
   function showProgress(progress: BuildProgress) {
     if (progress.step === "species") {
-      const month = new Date().getMonth() + 1;
-      const months = `${monthName(((month + 10) % 12) + 1)} to ${monthName((month % 12) + 1)}`;
+      const months = `${monthName(progress.months[0])} to ${monthName(progress.months.at(-1)!)}`;
       showStatus(
         `<p class="hint">${progress.radiusKm > 10 ? `Not enough within 10 km, so looking within ${progress.radiusKm} km` : `Looking for what's been seen within ${progress.radiusKm} km`}
           from ${months}, in any year…</p>`,

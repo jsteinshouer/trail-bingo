@@ -1,5 +1,7 @@
 import type { AnimalGroup, Square } from "../game";
 
+export const monthName = (month: number) => new Date(2000, month - 1).toLocaleString("en", { month: "long" });
+
 /** An error's message, for showing the player. */
 export const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
