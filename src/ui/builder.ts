@@ -1,5 +1,6 @@
 import { NotEnoughSpeciesError, type BuildProgress, type CardGroup, type CardSize, type Game, type Place } from "../game";
 import type { FoundPlace } from "../places";
+import { NoSignalError } from "../signal";
 import { ICON_CLOSE, ICON_LOCATE, kindGlyph } from "./icons";
 import { esc, messageOf, monthName } from "./text";
 
@@ -30,7 +31,13 @@ export interface BuilderOptions {
   search(name: string): Promise<FoundPlace[]>;
   /** The new Card is the active one and ready offline. */
   onBuilt(): void;
+  /** Settles when the photo check is ready, saying how it runs here. */
+  photoCheck: Promise<{ backend: string }>;
 }
+
+/** Building a Card asks iNaturalist what lives nearby, so it can't happen offline; playing can. */
+const NEEDS_SIGNAL =
+  "Building a Card needs signal, to find out what's been seen near there. Connect, then try again. Your current Card still plays with no signal.";
 
 /**
  * Building a Card: where, what size, which groups. Shown over the Card screen,
@@ -49,6 +56,8 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
       <button class="close" type="button" aria-label="Close">${ICON_CLOSE}</button>
     </header>
     <form class="builder-body">
+      <p class="hint slow-note" hidden>This phone runs the photo check without its graphics chip, so building a Card can take
+        several minutes. Keep the screen on until it's ready.</p>
       <fieldset class="where">
         <legend>Where</legend>
         <div class="search-row">
@@ -98,6 +107,12 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
   const buildLabel = $("[data-build] .label");
   const closeButton = $(".close");
 
+  // On a slower phone, say up front that building takes a while.
+  options.photoCheck.then(
+    ({ backend }) => ($(".slow-note").hidden = backend === "webgpu"),
+    () => {},
+  );
+
   let place: Where | null = null;
   let results: FoundPlace[] = [];
   let building = false;
@@ -145,6 +160,10 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
   }
 
   async function runSearch() {
+    if (!navigator.onLine) {
+      searchNote.innerHTML = `<span class="problem">Searching for a place needs signal. You can still use your location.</span>`;
+      return;
+    }
     const name = query.value.trim();
     if (!name) return query.focus();
     clearResults();
@@ -222,6 +241,7 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
 
   async function buildCard() {
     if (!place) return;
+    if (!navigator.onLine) return showStatus(`<p class="problem">${esc(NEEDS_SIGNAL)}</p>`);
     // Read the choices first: the form's controls are disabled while building, and FormData skips disabled ones.
     const request = { place, size: size(), groups: groups() };
     building = true;
@@ -236,7 +256,9 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
       showStatus(
         error instanceof NotEnoughSpeciesError
           ? `<p class="problem">${esc(error.message)}</p>`
-          : `<p class="problem">The Card couldn't be built. ${esc(messageOf(error))}</p>`,
+          : `<p class="problem">${esc(
+              error instanceof NoSignalError || !navigator.onLine ? NEEDS_SIGNAL : `The Card couldn't be built. ${messageOf(error)}`,
+            )}</p>`,
       );
     } finally {
       refresh();
@@ -259,7 +281,11 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
     const { name, region, lat, lng } = results[Number(button.dataset.place)];
     choose({ name, region, lat, lng });
   });
-  build.addEventListener("click", () => (game.hasCard() ? confirmReplace() : buildCard()));
+  build.addEventListener("click", () => {
+    // No point asking to replace the Card when a new one can't be built.
+    if (!navigator.onLine) return showStatus(`<p class="problem">${esc(NEEDS_SIGNAL)}</p>`);
+    return game.hasCard() ? confirmReplace() : buildCard();
+  });
   status.addEventListener("click", (event) => {
     const button = (event.target as Element).closest<HTMLButtonElement>("button");
     if (button?.dataset.replace !== undefined) buildCard();

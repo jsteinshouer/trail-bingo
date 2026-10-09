@@ -1,4 +1,5 @@
 import type { Fact, FactSource, PhotoSize, Taxon } from "../game";
+import { NoSignalError } from "../signal";
 
 const API = "https://api.inaturalist.org/v1/taxa";
 
@@ -79,7 +80,7 @@ export function createInatFactSource({ fetch }: { fetch: typeof globalThis.fetch
     try {
       response = await fetch(`${API}/${ids.join(",")}?locale=en&per_page=${BATCH}`);
     } catch {
-      throw new Error("Couldn't reach iNaturalist for facts. Check your connection, then try again.");
+      throw new NoSignalError("Couldn't reach iNaturalist for facts. Check your connection, then try again.");
     }
     if (!response.ok) throw new Error(`iNaturalist couldn't answer for facts (HTTP ${response.status}). Try again in a minute.`);
     return (await response.json()).results;

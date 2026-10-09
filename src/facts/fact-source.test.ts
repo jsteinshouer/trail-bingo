@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Taxon } from "../game";
+import { NoSignalError } from "../signal";
 import { createInatFactSource } from "./index";
 import taxa from "./fixtures/taxa.json";
 import taxaMissing from "./fixtures/taxa-missing.json";
@@ -165,8 +166,8 @@ describe("iNaturalist fact source", () => {
   });
 
   it("fails clearly when iNaturalist can't be reached", async () => {
-    await expect(
-      createInatFactSource(fakeInat({ unreachable: true })).factsFor([INDIANGRASS], { photoSize: "medium" }),
-    ).rejects.toThrow(/iNaturalist/);
+    const failure = createInatFactSource(fakeInat({ unreachable: true })).factsFor([INDIANGRASS], { photoSize: "medium" });
+    await expect(failure).rejects.toThrow(/iNaturalist/);
+    await expect(failure).rejects.toBeInstanceOf(NoSignalError);
   });
 });

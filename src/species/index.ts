@@ -1,4 +1,5 @@
 import type { AnimalGroup, LocalSpecies, SpeciesGroup, SpeciesQuery, SpeciesSource } from "../game";
+import { NoSignalError } from "../signal";
 import { WOODY_TAXA } from "./woody";
 
 const API = "https://api.inaturalist.org/v1/observations/species_counts";
@@ -58,7 +59,7 @@ export function createInatSpeciesSource({ fetch }: { fetch: typeof globalThis.fe
     try {
       response = await fetch(url);
     } catch {
-      throw new Error("Couldn't reach iNaturalist. Check your connection, then try again.");
+      throw new NoSignalError("Couldn't reach iNaturalist. Check your connection, then try again.");
     }
     if (!response.ok) throw new Error(`iNaturalist couldn't answer (HTTP ${response.status}). Try again in a minute.`);
     return (await response.json()).results;
