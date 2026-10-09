@@ -267,9 +267,10 @@ export function mountBuilder(root: HTMLElement, game: Game, options: BuilderOpti
   });
   closeButton.addEventListener("click", () => close());
 
-  function open() {
+  /** Opens the builder, with a notice to show first when there is one. */
+  function open(notice = "") {
     overlay.hidden = false;
-    showStatus("");
+    showStatus(notice && `<p class="problem">${esc(notice)}</p>`);
     refresh();
     (place ? build : locate).focus();
   }

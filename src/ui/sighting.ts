@@ -50,8 +50,8 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
 
   let stream: MediaStream | null = null;
   /** The current Sighting's photo, and its preview while the photo check looks at it. */
-  let image: Blob | null = null;
-  let photo: string | null = null;
+  let photo: Blob | null = null;
+  let preview: string | null = null;
   let open = false;
   /** The species each offered guess looks like, by Square, so a pick records it. */
   let guessTaxa = new Map<number, Taxon>();
@@ -92,9 +92,9 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
   }
 
   function discardPhoto() {
-    if (photo) URL.revokeObjectURL(photo);
+    if (preview) URL.revokeObjectURL(preview);
+    preview = null;
     photo = null;
-    image = null;
   }
 
   /** The central square of the frame: the same square the preview shows and the photo check crops. */
@@ -121,9 +121,9 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
       return showError(error);
     }
     stopCamera();
-    image = taken;
-    photo = URL.createObjectURL(taken);
-    still.src = photo;
+    photo = taken;
+    preview = URL.createObjectURL(taken);
+    still.src = preview;
     still.hidden = false;
     checking.hidden = false;
     shutter.hidden = true;
@@ -204,7 +204,7 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
     if (!button) return;
     if (button.dataset.pick !== undefined) {
       const index = Number(button.dataset.pick);
-      markWith(index, game.mark(index, "confirmed", { found: guessTaxa.get(index), photo: image ?? undefined }));
+      markWith(index, game.mark(index, "confirmed", { found: guessTaxa.get(index), photo: photo ?? undefined }));
     } else if ("retry" in button.dataset) {
       startCamera();
     } else if ("close" in button.dataset) {

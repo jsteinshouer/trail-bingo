@@ -1,4 +1,4 @@
-import type { Card, SavedGame, SavedProgress, Store } from "../game";
+import { NO_PROGRESS, type Card, type SavedGame, type SavedProgress, type Store } from "../game";
 
 /**
  * The active Card, kept on the phone in IndexedDB. Two records: the Card with
@@ -11,8 +11,6 @@ const VERSION = 1;
 const RECORDS = "game";
 const CARD = "card";
 const PROGRESS = "progress";
-
-const NO_PROGRESS: SavedProgress = { marks: [], found: [], photos: [] };
 
 /** An IndexedDB request as a promise. */
 const settled = <T>(request: IDBRequest<T>) =>
@@ -29,7 +27,7 @@ const committed = (transaction: IDBTransaction) =>
     transaction.onabort = () => reject(transaction.error ?? new Error("Saving on the phone was cancelled"));
   });
 
-export function createIndexedDbStore(indexedDB: IDBFactory = globalThis.indexedDB): Store {
+export function createIndexedDbStore(): Store {
   let database: Promise<IDBDatabase> | null = null;
 
   function open(): Promise<IDBDatabase> {

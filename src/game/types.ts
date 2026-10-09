@@ -82,6 +82,8 @@ export interface FactSource {
 }
 
 export interface Card {
+  /** Tells this Card's saved progress from an earlier Card's. Set when it's built. */
+  id?: string;
   place: Place;
   /** Month the Card was built for, 1–12. */
   month: number;
@@ -117,6 +119,8 @@ export interface SightingDetails {
 
 /** The play on a Card, Square by Square. */
 export interface SavedProgress {
+  /** The Card it's for: progress saved for another Card is ignored. */
+  cardId?: string;
   marks: (Mark | null)[];
   found: (Taxon | null)[];
   photos: (Blob | null)[];

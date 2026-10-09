@@ -14,7 +14,18 @@ import {
 } from "./icons";
 import { mountSighting } from "./sighting";
 import { factCard, photoCredit, photoUrl, referencePhoto, releasePhotos } from "./fact-card";
-import { esc, looksLike, messageOf, monthName, namedTaxon, placeTitle, secondLine, theCard, withArticle } from "./text";
+import {
+  esc,
+  looksLike,
+  messageOf,
+  monthName,
+  namedTaxon,
+  placeTitle,
+  saveProblem,
+  secondLine,
+  theCard,
+  withArticle,
+} from "./text";
 
 const MARK_LABEL: Record<Mark, string> = { verified: "Verified", confirmed: "Confirmed" };
 const MARK_NOTE: Record<Mark, string> = {
@@ -83,17 +94,18 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
   const panel = $(".panel");
   const bingoCount = $("output");
   const take = $<HTMLButtonElement>("[data-take]");
-  const saveProblem = $(".save-problem");
+  const saveNotice = $(".save-problem");
 
   const sighting = mountSighting(root, game, {
     encodeImage: (image) => photoCheck.encodeImage(image),
     onMarked(index, outcome) {
-      // A find that can't be kept on the phone says so; the Card still has it until the app closes.
+      // A Sighting that can't be kept on the phone says so; the Card still has it until the app closes.
       game.saved().then(
-        () => (saveProblem.hidden = true),
+        () => (saveNotice.hidden = true),
         (error) => {
-          saveProblem.textContent = `Your last find couldn't be saved on this phone, so it will be lost if the app closes. ${messageOf(error)}`;
-          saveProblem.hidden = false;
+          saveNotice.textContent = `Your last Sighting couldn't be saved on this phone, so it will be lost if the app closes. ${saveProblem(error)}`;
+          saveNotice.title = messageOf(error);
+          saveNotice.hidden = false;
         },
       );
       const state = game.state();

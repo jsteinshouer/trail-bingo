@@ -32,7 +32,10 @@ function startGame() {
   // A Card saved on the phone comes back as it was; without one, it's time to build one.
   game.restore().then(
     (restored) => (restored ? screen.render() : builder.open()),
-    () => builder.open(),
+    () =>
+      builder.open(
+        "Your saved Card couldn't be read on this phone. Building a new Card will replace it, so only build one if you're ready to start over.",
+      ),
   );
 }
 

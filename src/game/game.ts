@@ -17,6 +17,9 @@ import type {
   Taxon,
 } from "./types";
 
+/** Progress on a Card nobody has played yet. */
+export const NO_PROGRESS: SavedProgress = { marks: [], found: [], photos: [] };
+
 /** Labels per encoder call while building a Card, so progress can be shown between calls. */
 const LABEL_BATCH = 32;
 
@@ -188,18 +191,19 @@ export function createGame({ encoder, species, facts, store, now = () => new Dat
     };
   }
 
-  /** Makes `next` the active Card, with its label vectors and any play saved for it. */
-  function activate(next: Card, vectors: { list: Candidate[]; vectors: Float32Array[] }, progress?: SavedProgress) {
+  /** Makes `next` the active Card, with its label vectors (or their encoding) and any play saved for it. */
+  function activate(next: Card, vectors: typeof candidateVectors, progress: SavedProgress = NO_PROGRESS) {
     card = next;
-    marks = next.squares.map((_, i) => progress?.marks[i] ?? undefined);
-    found = next.squares.map((_, i) => progress?.found[i] ?? undefined);
-    photos = next.squares.map((_, i) => progress?.photos[i] ?? undefined);
-    candidateVectors = Promise.resolve(vectors);
+    marks = next.squares.map((_, i) => progress.marks[i] ?? undefined);
+    found = next.squares.map((_, i) => progress.found[i] ?? undefined);
+    photos = next.squares.map((_, i) => progress.photos[i] ?? undefined);
+    candidateVectors = vectors;
   }
 
   /** Saves the marks after any save already under way, so they land in order. */
   function saveProgress() {
     const progress: SavedProgress = {
+      cardId: card?.id,
       marks: marks.map((m) => m ?? null),
       found: found.map((f) => f ?? null),
       photos: photos.map((p) => p ?? null),
@@ -236,13 +240,14 @@ export function createGame({ encoder, species, facts, store, now = () => new Dat
         if (built) break;
       }
       if (!built) throw new NotEnoughSpeciesError(request.size);
+      built.id = `${now().getTime().toString(36)}-${Math.floor(random() * 2 ** 32).toString(36)}`;
       built.facts = await fetchFacts(built, onProgress);
 
       // Everything the photo check needs is ready, and saved, before the Card replaces the current one.
       const vectors = await encodeLabels(built, onProgress);
       await saving.catch(() => {});
       await store.saveCard(built, vectors.vectors);
-      activate(built, vectors);
+      activate(built, Promise.resolve(vectors));
       saving = Promise.resolve();
       return state();
     },
@@ -252,8 +257,10 @@ export function createGame({ encoder, species, facts, store, now = () => new Dat
       if (!saved) return false;
       const list = candidates(saved.card);
       // Vectors that don't fit the Card are encoded again on the first Sighting.
-      activate(saved.card, { list, vectors: saved.vectors }, saved.progress);
-      if (saved.vectors.length !== list.length) candidateVectors = encodeCandidates(saved.card);
+      const vectors =
+        saved.vectors.length === list.length ? Promise.resolve({ list, vectors: saved.vectors }) : encodeCandidates(saved.card);
+      // Marks saved for an earlier Card, landing after this one was saved, don't belong to it.
+      activate(saved.card, vectors, saved.progress.cardId === saved.card.id ? saved.progress : NO_PROGRESS);
       return true;
     },
 
@@ -273,11 +280,7 @@ export function createGame({ encoder, species, facts, store, now = () => new Dat
       if (next.squares.length !== expected) {
         throw new Error(`A ${next.size}×${next.size} Card needs ${expected} Squares, got ${next.squares.length}`);
       }
-      card = next;
-      marks = next.squares.map(() => undefined);
-      found = next.squares.map(() => undefined);
-      photos = next.squares.map(() => undefined);
-      candidateVectors = encodeCandidates(next);
+      activate(next, encodeCandidates(next));
     },
 
     mark,

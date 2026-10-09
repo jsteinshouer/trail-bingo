@@ -97,6 +97,29 @@ describe("restoring a Card", () => {
 });
 
 describe("saving progress", () => {
+  it("never puts the old Card's marks on a new one, even if they're saved while it's being saved", async () => {
+    const store = fakeStore();
+    const { game } = newGame(store);
+    await game.buildCard(REQUEST);
+    // Hold the new Card's save, and mark the old Card meanwhile.
+    let release!: () => void;
+    const saveCard = store.saveCard.bind(store);
+    store.saveCard = async (card, vectors) => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return saveCard(card, vectors);
+    };
+    const building = game.buildCard({ ...REQUEST, size: 4 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    game.mark(0, "verified", { photo: snapshot("old") });
+    release();
+    const second = await building;
+    await game.saved().catch(() => {});
+
+    const restored = newGame(store).game;
+    await restored.restore();
+    expect(restored.state()).toEqual(second);
+  });
+
   it("says when a mark couldn't be saved, keeping it on the Card meanwhile", async () => {
     const store = fakeStore();
     const { game } = newGame(store);

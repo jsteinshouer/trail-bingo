@@ -1,4 +1,5 @@
 import {
+  NO_PROGRESS,
   VERIFIED_GAP,
   type AnimalGroup,
   type CardGroup,
@@ -109,9 +110,10 @@ export function fakeStore(): Store & { saved: SavedGame | null; failSaves?: Erro
     async load() {
       return store.saved;
     },
+    // Copied the way IndexedDB copies, so anything that wouldn't survive being saved shows up in tests.
     async saveCard(card, vectors) {
       if (store.failSaves) throw store.failSaves;
-      store.saved = { card, vectors: [...vectors], progress: { marks: [], found: [], photos: [] } };
+      store.saved = structuredClone({ card, vectors, progress: NO_PROGRESS });
     },
     async saveProgress(progress) {
       if (store.failSaves) throw store.failSaves;

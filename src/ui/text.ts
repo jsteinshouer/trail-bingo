@@ -8,6 +8,12 @@ export const placeTitle = (place: Place) => place.name ?? "Your location";
 /** "the Elkhorn Card", or "this Card" when it has no place name. Not escaped. */
 export const theCard = (place: Place) => (place.name ? `the ${place.name} Card` : "this Card");
 
+/** Why something couldn't be saved on the phone, in plain words. */
+export const saveProblem = (error: unknown) =>
+  error instanceof Error && error.name === "QuotaExceededError"
+    ? "Your phone is out of space for it."
+    : "Your phone's storage didn't accept it.";
+
 /** An error's message, for showing the player. */
 export const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
