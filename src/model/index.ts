@@ -4,7 +4,7 @@
  */
 
 /** Cache API bucket holding the model files. */
-export const MODEL_CACHE = "trail-bingo-models-v1";
+const MODEL_CACHE = "trail-bingo-models-v1";
 
 /** No new bytes for this long and a download counts as dropped, since a lost signal can hang rather than fail. */
 const STALL_MS = 30_000;
@@ -18,9 +18,11 @@ export interface Manifest {
 }
 
 export interface DownloadProgress {
-  /** Bytes on the phone so far, counting files kept from an earlier try. */
+  /** Bytes received so far, counting files kept from an earlier try. */
   loaded: number;
   total: number;
+  /** Bytes saved as whole files: what a failed try keeps for the next one. */
+  stored: number;
 }
 
 /** The part of the Cache API the store uses. */
@@ -30,10 +32,8 @@ export interface CacheLike {
 }
 
 export interface ModelStoreOptions {
-  /** Where the model files are downloaded from. */
-  source: string;
-  /** Base URL of the files' storage keys, so they stay put wherever the files came from. */
-  keyBase: string;
+  /** Where the model files are downloaded from; also their keys in storage. */
+  base: string;
   fetch: typeof fetch;
   openCache(): Promise<CacheLike>;
   /** Asks the browser not to evict the model; resolves to whether it agreed. */
@@ -79,12 +79,11 @@ export class DownloadStalledError extends Error {
 }
 
 export function createModelStore(options: ModelStoreOptions): ModelStore {
-  const { source, keyBase, persist, stallMs = STALL_MS } = options;
-  const keyOf = (name: string) => new URL(name, keyBase).href;
-  const urlOf = (name: string) => new URL(name, source).href;
+  const { base, persist, stallMs = STALL_MS } = options;
+  const urlOf = (name: string) => new URL(name, base).href;
 
   async function storedManifest(cache: CacheLike): Promise<Manifest | null> {
-    const response = await cache.match(keyOf(MANIFEST));
+    const response = await cache.match(urlOf(MANIFEST));
     return response ? response.json() : null;
   }
 
@@ -106,7 +105,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       kick,
       stop: () => clearTimeout(timer),
       /** The error to report: a stall shows as a stall, whatever the stream threw. */
-      explain: (error: unknown) => (stalled ? new DownloadStalledError(name) : error),
+      errorFor: (error: unknown) => (stalled ? new DownloadStalledError(name) : error),
     };
   }
 
@@ -119,7 +118,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       return { name, response, watch, declared: Number(response.headers.get("content-length")) || 0 };
     } catch (error) {
       watch.stop();
-      throw watch.explain(error);
+      throw watch.errorFor(error);
     }
   }
 
@@ -128,10 +127,10 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
     try {
       const text = await response.text();
       const manifest: Manifest = JSON.parse(text);
-      await cache.put(keyOf(MANIFEST), new Response(text, { headers: { "content-type": "application/json" } }));
+      await cache.put(urlOf(MANIFEST), new Response(text, { headers: { "content-type": "application/json" } }));
       return manifest;
     } catch (error) {
-      throw watch.explain(error);
+      throw watch.errorFor(error);
     } finally {
       watch.stop();
     }
@@ -142,7 +141,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       const cache = await options.openCache();
       const manifest = await storedManifest(cache);
       if (!manifest) return false;
-      const found = await Promise.all(filesOf(manifest).map((name) => cache.match(keyOf(name))));
+      const found = await Promise.all(filesOf(manifest).map((name) => cache.match(urlOf(name))));
       return found.every(Boolean);
     },
 
@@ -153,7 +152,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       let kept = 0;
       const missing: string[] = [];
       for (const name of filesOf(manifest)) {
-        const stored = await cache.match(keyOf(name));
+        const stored = await cache.match(urlOf(name));
         if (stored) kept += (await stored.blob()).size;
         else missing.push(name);
       }
@@ -164,6 +163,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       const opened = opening.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
 
       const received = new Map(opened.map((file) => [file.name, 0]));
+      let stored = kept;
       const report = () => {
         let loaded = kept;
         let total = kept;
@@ -171,7 +171,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
           loaded += received.get(name)!;
           total += Math.max(declared, received.get(name)!);
         }
-        onProgress({ loaded, total });
+        onProgress({ loaded, total, stored });
       };
       report();
 
@@ -187,9 +187,11 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
             },
           });
           try {
-            await cache.put(keyOf(name), new Response(response.body!.pipeThrough(counter), { headers: response.headers }));
+            await cache.put(urlOf(name), new Response(response.body!.pipeThrough(counter), { headers: response.headers }));
+            stored += received.get(name)!;
+            report();
           } catch (error) {
-            throw watch.explain(error);
+            throw watch.errorFor(error);
           } finally {
             watch.stop();
           }
@@ -203,19 +205,17 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
 
     async read(name) {
       const cache = await options.openCache();
-      const response = await cache.match(keyOf(name));
+      const response = await cache.match(urlOf(name));
       if (!response) throw new ModelMissingError(name);
       return new Uint8Array(await response.arrayBuffer());
     },
   };
 }
 
-/** The model store for this app: Cache API storage, files served next to the app unless `VITE_MODEL_URL` says otherwise. */
+/** The model store for this app: files served from the app's `models/`, kept in the Cache API. */
 export function browserModelStore(): ModelStore {
-  const keyBase = new URL("models/", new URL(import.meta.env.BASE_URL, self.location.origin)).href;
   return createModelStore({
-    source: import.meta.env.VITE_MODEL_URL || keyBase,
-    keyBase,
+    base: new URL("models/", new URL(import.meta.env.BASE_URL, self.location.origin)).href,
     fetch: (input, init) => fetch(input, init),
     openCache: () => caches.open(MODEL_CACHE),
     persist: async () => (await navigator.storage?.persist?.()) ?? false,

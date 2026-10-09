@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createModelStore, type CacheLike, type DownloadProgress } from "./index";
 
-const SOURCE = "https://models.example/bioclip/";
-const KEYS = "https://app.example/models/";
+const BASE = "https://app.example/models/";
 
 const MANIFEST = JSON.stringify({ files: { fp16: { image: "image.onnx", text: "text.onnx" } } });
 
@@ -41,7 +40,7 @@ function fakeServer() {
   const requests: string[] = [];
   const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = String(input);
-    const name = url.slice(SOURCE.length);
+    const name = url.slice(BASE.length);
     requests.push(name);
     const fault = faults.get(name);
     if (fault === "offline") throw new TypeError("Failed to fetch");
@@ -80,14 +79,18 @@ function fakeCache(): CacheLike & { entries: Map<string, Uint8Array> } {
   };
 }
 
-function setup(options: { persist?: () => Promise<boolean>; stallMs?: number } = {}) {
+function setup(options: { persist?: () => Promise<boolean>; stallMs?: number; noLength?: boolean } = {}) {
   const server = fakeServer();
   const cache = fakeCache();
   const persistCalls: number[] = [];
   const store = createModelStore({
-    source: SOURCE,
-    keyBase: KEYS,
-    fetch: server.fetch,
+    base: BASE,
+    fetch: options.noLength
+      ? async (input, init) => {
+          const response = await server.fetch(input, init);
+          return new Response(response.body, { status: response.status });
+        }
+      : server.fetch,
     openCache: async () => cache,
     persist: async () => {
       persistCalls.push(1);
@@ -109,15 +112,15 @@ describe("model store", () => {
     expect(await store.isStored()).toBe(false);
   });
 
-  it("downloads every model file into browser storage, keyed by the app's own URLs", async () => {
+  it("downloads every model file into browser storage", async () => {
     const { store, cache } = setup();
     await store.download(() => {});
 
     expect(await store.isStored()).toBe(true);
     expect([...cache.entries.keys()].sort()).toEqual(
-      ["image.onnx", "manifest.json", "text.onnx", "tokenizer.json", "tokenizer_config.json"].map((n) => KEYS + n),
+      ["image.onnx", "manifest.json", "text.onnx", "tokenizer.json", "tokenizer_config.json"].map((n) => BASE + n),
     );
-    expect(cache.entries.get(KEYS + "image.onnx")).toEqual(SERVER["image.onnx"]);
+    expect(cache.entries.get(BASE + "image.onnx")).toEqual(SERVER["image.onnx"]);
   });
 
   it("reports real byte progress across the model files, ending at the total", async () => {
@@ -129,7 +132,18 @@ describe("model store", () => {
     for (const p of log) expect(p.total).toBe(DOWNLOAD_BYTES);
     const loaded = log.map((p) => p.loaded);
     expect(loaded).toEqual([...loaded].sort((a, b) => a - b));
-    expect(log.at(-1)).toEqual({ loaded: DOWNLOAD_BYTES, total: DOWNLOAD_BYTES });
+    expect(log.at(-1)).toEqual({ loaded: DOWNLOAD_BYTES, total: DOWNLOAD_BYTES, stored: DOWNLOAD_BYTES });
+  });
+
+  it("reports how much is stored as whole files, which a failed try keeps", async () => {
+    const { store, server } = setup();
+    server.faults.set("image.onnx", { failAfter: 300 });
+    const { log, onProgress } = progressLog();
+    await expect(store.download(onProgress)).rejects.toThrow();
+
+    // The image encoder's 300 bytes arrived but weren't kept; everything else was.
+    expect(log.at(-1)!.stored).toBe(DOWNLOAD_BYTES - 600);
+    expect(log.at(-1)!.loaded).toBeGreaterThan(log.at(-1)!.stored);
   });
 
   it("asks for persistent storage once the download finishes", async () => {
@@ -141,12 +155,12 @@ describe("model store", () => {
   });
 
   it("fails when the connection drops mid-file, storing no partial file", async () => {
-    const { store, server, cache, persistCalls } = setup();
+    const { store, server, persistCalls } = setup();
     server.faults.set("image.onnx", { failAfter: 300 });
 
     await expect(store.download(() => {})).rejects.toThrow();
     expect(await store.isStored()).toBe(false);
-    expect(cache.entries.has(KEYS + "image.onnx")).toBe(false);
+    await expect(store.read("image.onnx")).rejects.toThrow(/isn't on this phone/);
     expect(persistCalls).toHaveLength(0);
   });
 
@@ -189,7 +203,7 @@ describe("model store", () => {
     // Files kept from the first try count as already downloaded.
     expect(log[0].total).toBe(DOWNLOAD_BYTES);
     expect(log[0].loaded).toBeGreaterThanOrEqual(DOWNLOAD_BYTES - 600);
-    expect(log.at(-1)).toEqual({ loaded: DOWNLOAD_BYTES, total: DOWNLOAD_BYTES });
+    expect(log.at(-1)).toEqual({ loaded: DOWNLOAD_BYTES, total: DOWNLOAD_BYTES, stored: DOWNLOAD_BYTES });
   });
 
   it("keeps the other files when one can't even start downloading", async () => {
@@ -207,7 +221,7 @@ describe("model store", () => {
   it("isn't stored if the browser has since dropped one of the files", async () => {
     const { store, cache } = setup();
     await store.download(() => {});
-    cache.entries.delete(KEYS + "text.onnx");
+    cache.entries.delete(BASE + "text.onnx");
 
     expect(await store.isStored()).toBe(false);
   });
@@ -230,21 +244,11 @@ describe("model store", () => {
   });
 
   it("keeps progress sane when the server doesn't send a length", async () => {
-    const server = fakeServer();
-    const store = createModelStore({
-      source: SOURCE,
-      keyBase: KEYS,
-      fetch: async (input, init) => {
-        const response = await server.fetch(input, init);
-        return new Response(response.body, { status: response.status });
-      },
-      openCache: async () => fakeCache(),
-      persist: async () => true,
-    });
+    const { store } = setup({ noLength: true });
     const { log, onProgress } = progressLog();
     await store.download(onProgress);
 
     for (const p of log) expect(p.loaded).toBeLessThanOrEqual(p.total);
-    expect(log.at(-1)).toEqual({ loaded: DOWNLOAD_BYTES, total: DOWNLOAD_BYTES });
+    expect(log.at(-1)).toEqual({ loaded: DOWNLOAD_BYTES, total: DOWNLOAD_BYTES, stored: DOWNLOAD_BYTES });
   });
 });

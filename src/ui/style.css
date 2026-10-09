@@ -362,10 +362,10 @@ button { font: inherit; color: inherit; }
   border-top: 1.5px solid var(--ink);
 }
 .setup .lede { margin: 14px 0 0; font: 400 17px/1.5 var(--face-text); max-width: 38ch; }
-.legend { margin: 18px 0 0; display: grid; gap: 10px; }
-.legend div { padding: 10px 12px; background: var(--wood); border-left: 4px solid var(--contour); }
-.legend dt { font: 700 20px/1.1 var(--face-label); letter-spacing: .01em; }
-.legend dd { margin: 2px 0 0; font: 400 15px/1.4 var(--face-text); color: var(--ink-soft); }
+.setup .legend { margin: 18px 0 0; display: grid; gap: 10px; }
+.setup .legend div { padding: 10px 12px; background: var(--wood); border-left: 4px solid var(--contour); }
+.setup .legend dt { font: 700 20px/1.1 var(--face-label); letter-spacing: .01em; }
+.setup .legend dd { margin: 2px 0 0; font: 400 15px/1.4 var(--face-text); color: var(--ink-soft); }
 .download { margin-top: auto; padding-top: 22px; }
 .dl-bar { height: 14px; border: 1.5px solid var(--ink); background: repeating-linear-gradient(to right, var(--paper) 0 calc(10% - 1px), var(--ink) calc(10% - 1px) 10%); }
 .dl-bar i { display: block; height: 100%; width: 0; background: var(--purple); transition: width .3s linear; }

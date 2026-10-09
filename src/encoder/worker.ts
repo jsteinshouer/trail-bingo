@@ -24,7 +24,7 @@ interface Model {
 
 const post = (message: Response, transfer: Transferable[] = []) => self.postMessage(message, { transfer });
 
-/** The setup screen downloaded the model; the photo check only ever reads it from browser storage. */
+/** The model was downloaded at first launch; the photo check only ever reads it from browser storage. */
 const store = browserModelStore();
 const readJson = async <T>(name: string): Promise<T> => JSON.parse(new TextDecoder().decode(await store.read(name)));
 
