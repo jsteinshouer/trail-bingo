@@ -44,7 +44,7 @@ Keep the check a pure function that takes the browser features as input, so it c
 
 **Implemented on branch `10-installable-and-offline`.**
 
-- **Installable:** `public/manifest.webmanifest` (standalone, portrait, paper colours) and icons drawn from the Card's triangulation-station Wildcard mark on photorevision purple (`public/icons/`, regenerate with `scripts/draw-icons.py`). Chrome reported no installability errors.
+- **Installable:** `public/manifest.webmanifest` (standalone, portrait, paper colours) and icons: a 3×3 Card in paper on photorevision purple with the legend's plant symbol in the centre Square, chosen from ten options (`public/icons/`, regenerate with `scripts/draw-icons.py`). Chrome reported no installability errors.
 - **Service worker** (`src/offline/service-worker.ts`, built as `sw.js`):
   - A Vite plugin in `vite.config.ts` gives it the app shell (every built file, plus the manifest and icons, about 27 MB, mostly ONNX Runtime's WebAssembly) and a version that changes with them.
   - Pages in scope and the shell files come from the shell cache. `models/`, iNaturalist, OpenStreetMap and photos go to the network: the setup screen stores the model in its own cache.
