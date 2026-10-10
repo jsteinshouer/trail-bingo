@@ -1,4 +1,4 @@
-import type { CardState, Game, Mark, MarkedSquare, MarkOutcome } from "../game";
+import { squareName, type CardState, type Game, type Mark, type MarkedSquare, type MarkOutcome } from "../game";
 import {
   glyph,
   ICON_CAMERA,
@@ -53,8 +53,19 @@ export interface CardScreenOptions {
   onNewCard(): void;
   /** Keeps a record of each Sighting for the hike log. */
   record?: SightingRecorder;
-  /** How many Sightings the hike log holds, and a way to save it as a file. */
-  hikeLog?: { count(): Promise<number>; export(): Promise<void> };
+  /** The optional hike log: off until the player turns it on. */
+  hikeLog?: HikeLogControls;
+}
+
+export interface HikeLogControls {
+  isOn(): boolean;
+  /** Starts a fresh log. */
+  start(): Promise<void>;
+  /** Stops the log and deletes it, photos and all. */
+  stop(): Promise<void>;
+  count(): Promise<number>;
+  /** Saves the log as a file to share. */
+  export(): Promise<void>;
 }
 
 /** The on-trail Card screen: the sheet, its collars, Square detail, Sightings and celebrations. */
@@ -70,7 +81,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
       <button class="menu-btn" type="button" aria-label="Card menu" aria-haspopup="menu" aria-expanded="false" data-menu>${ICON_GRID}</button>
       <div class="card-menu" role="menu" hidden>
         <button type="button" role="menuitem" data-new-card>New Card</button>
-        ${options.hikeLog ? '<button type="button" role="menuitem" data-export-log>Export hike log<small></small></button>' : ""}
+        <div class="hike-log-items"></div>
         <p class="menu-note" aria-live="polite"></p>
       </div>
     </header>
@@ -145,11 +156,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     menu.hidden = false;
     menuButton.setAttribute("aria-expanded", "true");
     menuNote.textContent = "";
-    const count = root.querySelector("[data-export-log] small");
-    options.hikeLog?.count().then(
-      (n) => count && (count.textContent = n === 1 ? "1 Sighting" : `${n} Sightings`),
-      () => {},
-    );
+    renderHikeLogItems();
     menu.querySelector<HTMLElement>("button")!.focus();
   }
 
@@ -164,14 +171,49 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     closeMenu();
     options.onNewCard();
   });
-  root.querySelector("[data-export-log]")?.addEventListener("click", async () => {
-    menuNote.textContent = "Getting the hike log ready…";
+  /** The hike log's menu items: one to turn it on, or, once it's on, export and stop. */
+  function renderHikeLogItems() {
+    const log = options.hikeLog;
+    const items = $(".hike-log-items");
+    if (!log) return void (items.innerHTML = "");
+    if (!log.isOn()) {
+      items.innerHTML = `<button type="button" role="menuitem" data-log-start>Keep a hike log
+        <small>Saves each Sighting and its photo on this phone, to share later for tuning the photo check.</small></button>`;
+      return;
+    }
+    items.innerHTML = `<button type="button" role="menuitem" data-log-export>Export hike log<small>Includes your Sighting photos.</small></button>
+      <button type="button" role="menuitem" data-log-stop>Stop and delete hike log</button>`;
+    log.count().then(
+      (n) => {
+        const small = items.querySelector("[data-log-export] small");
+        if (small) small.textContent = `${n === 1 ? "1 Sighting" : `${n} Sightings`}, with their photos.`;
+      },
+      () => {},
+    );
+  }
+
+  $(".hike-log-items").addEventListener("click", async (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>("button");
+    const log = options.hikeLog;
+    if (!button || !log) return;
     try {
-      await options.hikeLog!.export();
-      closeMenu();
+      if ("logStart" in button.dataset) {
+        await log.start();
+        menuNote.textContent = "Keeping a hike log from now on.";
+      } else if ("logStop" in button.dataset) {
+        await log.stop();
+        menuNote.textContent = "The hike log is stopped and deleted.";
+      } else if ("logExport" in button.dataset) {
+        menuNote.textContent = "Getting the hike log ready…";
+        await log.export();
+        menuNote.textContent = "";
+        return closeMenu();
+      }
+      renderHikeLogItems();
     } catch (error) {
       // Closing the share sheet without choosing an app isn't a problem.
-      menuNote.textContent = error instanceof Error && error.name === "AbortError" ? "" : `The hike log couldn't be saved. ${messageOf(error)}`;
+      menuNote.textContent =
+        error instanceof Error && error.name === "AbortError" ? "" : `That didn't work: ${messageOf(error)}`;
     }
   });
   addEventListener("click", (event) => {
@@ -350,7 +392,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
   function renderDetail() {
     const index = openIndex!;
     const square: MarkedSquare = game.state().squares[index];
-    const name = square.kind === "wildcard" ? "Wildcard" : square.name;
+    const name = squareName(square);
 
     let meta: string;
     let body = "";

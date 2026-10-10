@@ -18,10 +18,16 @@ import type {
   Taxon,
 } from "./types";
 
+/** A Square's name, as the player sees it. */
+export const squareName = (square: Square) => (square.kind === "wildcard" ? "Wildcard" : square.name);
+
+/** A Sighting's outcome with the photo check's working. */
+export type CheckedSighting = SightingOutcome & { check: SightingCheck };
+
 /** Progress on a Card nobody has played yet. */
 export const NO_PROGRESS: SavedProgress = { marks: [], found: [], photos: [] };
 
-/** Matches a Sighting's check reports. */
+/** How many of the best matches a Sighting's check reports. */
 const CHECK_MATCHES = 5;
 
 /** Labels per encoder call while building a Card, so progress can be shown between calls. */
@@ -93,7 +99,7 @@ export interface Game {
    * sure match to a local species off the Card fills the open Wildcard;
    * nothing else changes the Card.
    */
-  sighting(vector: Float32Array, photo?: Blob): Promise<SightingOutcome & { check: SightingCheck }>;
+  sighting(vector: Float32Array, photo?: Blob): Promise<CheckedSighting>;
   /** Settles when the marks so far are saved on the phone, or rejects if the last save failed. */
   saved(): Promise<void>;
   /** The active Card and its marks. */

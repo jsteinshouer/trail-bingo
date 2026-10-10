@@ -197,7 +197,8 @@ describe("a sure Sighting of a local species that isn't on the Card", () => {
     const before = game.state();
     const outcome = await game.sighting(photo({ "Argiope aurantia": 0.3, "Sciurus niger": 0.3 - SURE }));
 
-    expect(outcome).toMatchObject({ kind: "not-on-card", taxon: SPIDER, wildcardFilledBy: YARROW });
+    const { check: _, ...answer } = outcome;
+    expect(answer).toEqual({ kind: "not-on-card", taxon: SPIDER, wildcardFilledBy: YARROW });
     expect(game.state()).toEqual(before);
   });
 
@@ -217,7 +218,8 @@ describe("a Sighting of an already-marked Square", () => {
     game.mark(0, "confirmed");
     const before = game.state();
     const outcome = await game.sighting(photo({ "Quercus macrocarpa": 0.33, "Celtis occidentalis": 0.33 - SURE }));
-    expect(outcome).toMatchObject({ kind: "already-marked", index: 0, taxon: BUR_OAK });
+    const { check: _, ...answer } = outcome;
+    expect(answer).toEqual({ kind: "already-marked", index: 0, taxon: BUR_OAK });
     expect(game.state()).toEqual(before);
   });
 });
