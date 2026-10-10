@@ -1,0 +1,15 @@
+# Netlify response headers (https://docs.netlify.com/manage/routing/headers/).
+
+# Cross-origin isolation lets the photo check run multi-threaded WebAssembly
+# when WebGPU isn't available. The model comes from Hugging Face, which sends CORS headers.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+# The service worker must always be fresh, so new versions are found.
+/sw.js
+  Cache-Control: no-cache
+
+# Built files are named by their content, so they never change.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

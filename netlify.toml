@@ -1,0 +1,10 @@
+# Netlify settings. The GitHub Actions workflow (.github/workflows/deploy.yml)
+# builds and deploys; these apply if the site is ever built by Netlify itself.
+# Response headers are in public/_headers. Set VITE_MODEL_URL in Netlify's
+# environment variables to the Hugging Face model URL (see docs/deploy.md).
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "24"

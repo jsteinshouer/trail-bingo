@@ -35,12 +35,14 @@ function streamOf(body: Uint8Array, failAfter?: number) {
 
 type Fault = "offline" | "http-500" | { failAfter: number } | "stall";
 
-function fakeServer() {
+/** Serves the model files under `origin`; anything else is a 404. */
+function fakeServer(origin = BASE) {
   const faults = new Map<string, Fault>();
   const requests: string[] = [];
   const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = String(input);
-    const name = url.slice(BASE.length);
+    if (!url.startsWith(origin)) return new Response("not here", { status: 404 });
+    const name = url.slice(origin.length);
     requests.push(name);
     const fault = faults.get(name);
     if (fault === "offline") throw new TypeError("Failed to fetch");
@@ -107,6 +109,19 @@ const progressLog = () => {
 };
 
 describe("model store", () => {
+  it("can download from another host, such as Hugging Face, while storing under the app's own keys", async () => {
+    const HOST = "https://huggingface.co/someone/trail-bingo-bioclip/resolve/main/";
+    const server = fakeServer(HOST);
+    const cache = fakeCache();
+    const store = createModelStore({ base: BASE, source: HOST, fetch: server.fetch, openCache: async () => cache, persist: async () => true });
+    await store.download(() => {});
+
+    expect(server.requests.sort()).toEqual(Object.keys(SERVER).sort());
+    expect([...cache.entries.keys()].every((key) => key.startsWith(BASE))).toBe(true);
+    expect(await store.isStored()).toBe(true);
+    expect(await store.read("image.onnx")).toEqual(SERVER["image.onnx"]);
+  });
+
   it("isn't stored before the first download", async () => {
     const { store } = setup();
     expect(await store.isStored()).toBe(false);

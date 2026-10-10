@@ -32,8 +32,10 @@ export interface CacheLike {
 }
 
 export interface ModelStoreOptions {
-  /** Where the model files are downloaded from; also their keys in storage. */
+  /** The model files' keys in storage, and where they're downloaded from unless `source` says otherwise. */
   base: string;
+  /** Where the model files are downloaded from, when it isn't `base`: a model host such as Hugging Face. */
+  source?: string;
   fetch: typeof fetch;
   openCache(): Promise<CacheLike>;
   /** Asks the browser not to evict the model; resolves to whether it agreed. */
@@ -79,11 +81,13 @@ export class DownloadStalledError extends Error {
 }
 
 export function createModelStore(options: ModelStoreOptions): ModelStore {
-  const { base, persist, stallMs = STALL_MS } = options;
-  const urlOf = (name: string) => new URL(name, base).href;
+  const { base, source = base, persist, stallMs = STALL_MS } = options;
+  /** A file's key in storage: always under the app's own `base`, wherever it came from. */
+  const keyOf = (name: string) => new URL(name, base).href;
+  const downloadUrlOf = (name: string) => new URL(name, source).href;
 
   async function storedManifest(cache: CacheLike): Promise<Manifest | null> {
-    const response = await cache.match(urlOf(MANIFEST));
+    const response = await cache.match(keyOf(MANIFEST));
     return response ? response.json() : null;
   }
 
@@ -113,7 +117,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
   async function open(name: string) {
     const watch = watchdog(name);
     try {
-      const response = await options.fetch(urlOf(name), { signal: watch.signal, cache: "no-store" });
+      const response = await options.fetch(downloadUrlOf(name), { signal: watch.signal, cache: "no-store" });
       if (!response.ok || !response.body) throw new Error(`Couldn't download ${name}: HTTP ${response.status}`);
       return { name, response, watch, declared: Number(response.headers.get("content-length")) || 0 };
     } catch (error) {
@@ -127,7 +131,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
     try {
       const text = await response.text();
       const manifest: Manifest = JSON.parse(text);
-      await cache.put(urlOf(MANIFEST), new Response(text, { headers: { "content-type": "application/json" } }));
+      await cache.put(keyOf(MANIFEST), new Response(text, { headers: { "content-type": "application/json" } }));
       return manifest;
     } catch (error) {
       throw watch.errorFor(error);
@@ -141,7 +145,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       const cache = await options.openCache();
       const manifest = await storedManifest(cache);
       if (!manifest) return false;
-      const found = await Promise.all(filesOf(manifest).map((name) => cache.match(urlOf(name))));
+      const found = await Promise.all(filesOf(manifest).map((name) => cache.match(keyOf(name))));
       return found.every(Boolean);
     },
 
@@ -152,7 +156,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       let kept = 0;
       const missing: string[] = [];
       for (const name of filesOf(manifest)) {
-        const stored = await cache.match(urlOf(name));
+        const stored = await cache.match(keyOf(name));
         if (stored) kept += (await stored.blob()).size;
         else missing.push(name);
       }
@@ -187,7 +191,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
             },
           });
           try {
-            await cache.put(urlOf(name), new Response(response.body!.pipeThrough(counter), { headers: response.headers }));
+            await cache.put(keyOf(name), new Response(response.body!.pipeThrough(counter), { headers: response.headers }));
             stored += received.get(name)!;
             report();
           } catch (error) {
@@ -205,17 +209,22 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
 
     async read(name) {
       const cache = await options.openCache();
-      const response = await cache.match(urlOf(name));
+      const response = await cache.match(keyOf(name));
       if (!response) throw new ModelMissingError(name);
       return new Uint8Array(await response.arrayBuffer());
     },
   };
 }
 
-/** The model store for this app: files served from the app's `models/`, kept in the Cache API. */
+/**
+ * The model store for this app, kept in the Cache API. The files download from
+ * `VITE_MODEL_URL` when the build sets it (the published app gets them from
+ * Hugging Face), otherwise from the app's own `models/`.
+ */
 export function browserModelStore(): ModelStore {
   return createModelStore({
     base: new URL("models/", new URL(import.meta.env.BASE_URL, self.location.origin)).href,
+    source: import.meta.env.VITE_MODEL_URL || undefined,
     fetch: (input, init) => fetch(input, init),
     openCache: () => caches.open(MODEL_CACHE),
     persist: async () => (await navigator.storage?.persist?.()) ?? false,
