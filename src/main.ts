@@ -56,9 +56,11 @@ function hikeLogFor(game: Game, encoder: BioclipEncoder): { record: SightingReco
   let lastEntryId: Promise<string | null> = Promise.resolve(null);
 
   function save(entry: (context: EntryContext) => HikeEntry, photo: Blob, timing: CheckTiming) {
+    // Every check counts toward "first since launch", logged or not: the first one includes starting up.
+    const firstSinceLaunch = ++checks === 1;
     if (!hikeLogOn()) return;
     const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const context = { id, at: new Date(), card: game.state(), timing, firstSinceLaunch: ++checks === 1, photo };
+    const context = { id, at: new Date(), card: game.state(), timing, firstSinceLaunch, photo };
     lastEntryId = Promise.all([encoder.ready.catch(() => null), batteryNow()])
       .then(([info, battery]) => log.add(entry({ ...context, backend: info?.backend, battery })))
       .then(() => id, () => null);
