@@ -197,7 +197,7 @@ describe("a sure Sighting of a local species that isn't on the Card", () => {
     const before = game.state();
     const outcome = await game.sighting(photo({ "Argiope aurantia": 0.3, "Sciurus niger": 0.3 - SURE }));
 
-    expect(outcome).toEqual({ kind: "not-on-card", taxon: SPIDER, wildcardFilledBy: YARROW });
+    expect(outcome).toMatchObject({ kind: "not-on-card", taxon: SPIDER, wildcardFilledBy: YARROW });
     expect(game.state()).toEqual(before);
   });
 
@@ -217,7 +217,7 @@ describe("a Sighting of an already-marked Square", () => {
     game.mark(0, "confirmed");
     const before = game.state();
     const outcome = await game.sighting(photo({ "Quercus macrocarpa": 0.33, "Celtis occidentalis": 0.33 - SURE }));
-    expect(outcome).toEqual({ kind: "already-marked", index: 0, taxon: BUR_OAK });
+    expect(outcome).toMatchObject({ kind: "already-marked", index: 0, taxon: BUR_OAK });
     expect(game.state()).toEqual(before);
   });
 });
@@ -274,5 +274,36 @@ describe("Verified and Confirmed Squares from Sightings", () => {
     const last = await sure("Morus alba", "Ulmus americana"); // 8, Verified
     expect(last).toMatchObject({ kind: "verified", index: 8, mark: { blackout: true } });
     expect(game.state().blackout).toBe(true);
+  });
+});
+
+describe("the photo check's working, for the hike log", () => {
+  it("comes with every Sighting: the five best matches, best first, with their scores and Squares", async () => {
+    const game = playing();
+    const outcome = await game.sighting(
+      photo({ "Quercus macrocarpa": 0.33, "Celtis occidentalis": 0.31, "Ulmus americana": 0.3, "Achillea millefolium": 0.2 }),
+    );
+
+    const { matches } = outcome.check;
+    expect(matches).toHaveLength(5);
+    expect(matches.slice(0, 4).map((m) => [m.taxon.scientificName, m.square])).toEqual([
+      ["Quercus macrocarpa", 0],
+      ["Celtis occidentalis", 1],
+      ["Ulmus americana", 3],
+      ["Achillea millefolium", null],
+    ]);
+    expect(matches[0].score).toBeCloseTo(0.33, 5);
+    expect(matches.map((m) => m.score)).toEqual([...matches.map((m) => m.score)].sort((a, b) => b - a));
+  });
+
+  it("says how far the best match led and what the photo check needed", async () => {
+    const game = playing();
+    const unsure = await game.sighting(photo({ "Quercus macrocarpa": 0.33, "Celtis occidentalis": 0.31 }));
+    const sure = await game.sighting(photo({ "Ulmus americana": 0.33, "Rhus glabra": 0.33 - SURE }));
+
+    expect(unsure).toMatchObject({ kind: "unsure", check: { threshold: VERIFIED_GAP } });
+    expect(unsure.check.gap).toBeCloseTo(0.02, 5);
+    expect(sure).toMatchObject({ kind: "verified" });
+    expect(sure.check.gap).toBeCloseTo(SURE, 5);
   });
 });

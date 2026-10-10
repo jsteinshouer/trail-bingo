@@ -12,7 +12,7 @@ import {
   KIND_LABEL,
   kindOf,
 } from "./icons";
-import { mountSighting } from "./sighting";
+import { mountSighting, type SightingRecorder } from "./sighting";
 import { factCard, photoCredit, photoUrl, referencePhoto, releasePhotos } from "./fact-card";
 import {
   esc,
@@ -49,8 +49,16 @@ export interface PhotoCheck {
   encodeImage(image: Blob): Promise<Float32Array>;
 }
 
+export interface CardScreenOptions {
+  onNewCard(): void;
+  /** Keeps a record of each Sighting for the hike log. */
+  record?: SightingRecorder;
+  /** How many Sightings the hike log holds, and a way to save it as a file. */
+  hikeLog?: { count(): Promise<number>; export(): Promise<void> };
+}
+
 /** The on-trail Card screen: the sheet, its collars, Square detail, Sightings and celebrations. */
-export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: PhotoCheck, options: { onNewCard(): void }) {
+export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: PhotoCheck, options: CardScreenOptions) {
   let cells: HTMLButtonElement[] = [];
   let openIndex: number | null = null;
   let lastFocus: HTMLElement | null = null;
@@ -59,7 +67,12 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     <header class="collar-top">
       <h1 class="quad-name" data-place></h1>
       <div class="quad-meta" data-meta></div>
-      <button class="menu-btn" type="button" aria-label="New Card" data-new-card>${ICON_GRID}</button>
+      <button class="menu-btn" type="button" aria-label="Card menu" aria-haspopup="menu" aria-expanded="false" data-menu>${ICON_GRID}</button>
+      <div class="card-menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-new-card>New Card</button>
+        ${options.hikeLog ? '<button type="button" role="menuitem" data-export-log>Export hike log<small></small></button>' : ""}
+        <p class="menu-note" aria-live="polite"></p>
+      </div>
     </header>
     <div class="sheet-wrap">
       <div class="coords" aria-hidden="true"><span data-north></span><span data-size-tag></span><span data-east></span></div>
@@ -97,6 +110,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
   const saveNotice = $(".save-problem");
 
   const sighting = mountSighting(root, game, {
+    record: options.record,
     encodeImage: (image) => photoCheck.encodeImage(image),
     onMarked(index, outcome) {
       // A Sighting that can't be kept on the phone says so; the Card still has it until the app closes.
@@ -121,7 +135,48 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     onClose: () => take.focus(),
   });
   take.addEventListener("click", sighting.open);
-  $("[data-new-card]").addEventListener("click", () => options.onNewCard());
+  /* ── The Card menu ─────────────────────────────────────────────── */
+
+  const menuButton = $<HTMLButtonElement>("[data-menu]");
+  const menu = $(".card-menu");
+  const menuNote = $(".menu-note");
+
+  function openMenu() {
+    menu.hidden = false;
+    menuButton.setAttribute("aria-expanded", "true");
+    menuNote.textContent = "";
+    const count = root.querySelector("[data-export-log] small");
+    options.hikeLog?.count().then(
+      (n) => count && (count.textContent = n === 1 ? "1 Sighting" : `${n} Sightings`),
+      () => {},
+    );
+    menu.querySelector<HTMLElement>("button")!.focus();
+  }
+
+  function closeMenu() {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    menuButton.setAttribute("aria-expanded", "false");
+  }
+
+  menuButton.addEventListener("click", () => (menu.hidden ? openMenu() : closeMenu()));
+  $("[data-new-card]").addEventListener("click", () => {
+    closeMenu();
+    options.onNewCard();
+  });
+  root.querySelector("[data-export-log]")?.addEventListener("click", async () => {
+    menuNote.textContent = "Getting the hike log ready…";
+    try {
+      await options.hikeLog!.export();
+      closeMenu();
+    } catch (error) {
+      // Closing the share sheet without choosing an app isn't a problem.
+      menuNote.textContent = error instanceof Error && error.name === "AbortError" ? "" : `The hike log couldn't be saved. ${messageOf(error)}`;
+    }
+  });
+  addEventListener("click", (event) => {
+    if (!menu.contains(event.target as Node) && !menuButton.contains(event.target as Node)) closeMenu();
+  });
 
   // The band says what the photo check is doing until it's ready for Sightings.
   const takeLabel = take.querySelector(".label")!;
@@ -355,7 +410,9 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
 
   $(".scrim").addEventListener("click", closeDetail);
   addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeDetail();
+    if (e.key !== "Escape") return;
+    closeMenu();
+    closeDetail();
   });
   addEventListener("popstate", hideDetail);
 
