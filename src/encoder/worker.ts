@@ -5,6 +5,7 @@ import { centerCrop, toPixelValues } from "./preprocess";
 import type { Backend, EncoderInfo, Request, Response } from "./protocol";
 import { loadTokenizer, tokenize } from "./tokenize";
 import type { Tokenizer } from "@huggingface/tokenizers";
+import { lightPhotoCheck } from "../device";
 import { browserModelStore, type Manifest } from "../model";
 
 // BioCLIP in a Web Worker, as proven on the target phone by the spike (ticket 01).
@@ -15,11 +16,12 @@ ort.env.wasm.wasmPaths = { wasm: wasmUrl, mjs: mjsUrl };
 /** Labels per text-encoder run, so a few hundred local species don't need one huge tensor. */
 const TEXT_BATCH = 32;
 
+/** The two halves of BioCLIP. Only one is in memory at a time: together they don't fit older phones. */
+type Half = "image" | "text";
+
 interface Model {
   manifest: Manifest;
   tokenizer: Tokenizer;
-  imageSession: ort.InferenceSession;
-  textSession: ort.InferenceSession;
 }
 
 const post = (message: Response, transfer: Transferable[] = []) => self.postMessage(message, { transfer });
@@ -36,41 +38,62 @@ async function pickBackend(): Promise<{ backend: Backend; fallbackReason?: strin
   return { backend: "webgpu" };
 }
 
-async function createSessions(image: Uint8Array, text: Uint8Array, backend: Backend) {
-  const options = { executionProviders: [backend], graphOptimizationLevel: "all" as const };
-  const imageSession = await ort.InferenceSession.create(image, options);
-  try {
-    return { imageSession, textSession: await ort.InferenceSession.create(text, options) };
-  } catch (error) {
-    await imageSession.release();
-    throw error;
+/**
+ * Full optimization folds the fp16 weights into fp32 copies: faster checks, twice
+ * the memory. Phones with little memory keep fp16 and convert as they go.
+ */
+const OPTIMIZATION = lightPhotoCheck((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? null)
+  ? "disabled"
+  : "all";
+
+let chosen: { backend: Backend; fallbackReason?: string } = { backend: "wasm" };
+/** The half in memory now, if any. */
+let loadedHalf: { half: Half; session: ort.InferenceSession } | null = null;
+
+/**
+ * The session for one half, swapping out the other first. Sightings use the
+ * image half; only building a Card uses the text half, since a Card's labels
+ * are encoded once and saved. If WebGPU can't run it, WebAssembly takes over.
+ */
+async function sessionFor({ manifest }: Model, half: Half): Promise<ort.InferenceSession> {
+  if (loadedHalf?.half === half) return loadedHalf.session;
+  if (loadedHalf) {
+    const { session } = loadedHalf;
+    loadedHalf = null;
+    await session.release();
   }
+  const files = manifest.files.fp16;
+  const bytes = await store.read(half === "image" ? files.image : files.text);
+  const create = (backend: Backend) =>
+    ort.InferenceSession.create(bytes, { executionProviders: [backend], graphOptimizationLevel: OPTIMIZATION });
+  let session: ort.InferenceSession;
+  try {
+    session = await create(chosen.backend);
+  } catch (error) {
+    if (chosen.backend !== "webgpu") throw error;
+    chosen = { backend: "wasm", fallbackReason: `WebGPU failed: ${String(error)}` };
+    session = await create("wasm");
+  }
+  loadedHalf = { half, session };
+  return session;
 }
 
+/** Ready for Sightings: the tokenizer, and the image half in memory. */
 async function load(): Promise<Model> {
   const start = performance.now();
   const manifest = await readJson<Manifest>("manifest.json");
-  const files = manifest.files.fp16;
   const [tokenizerJson, tokenizerConfig] = await Promise.all([
     readJson<object>("tokenizer.json"),
     readJson<object>("tokenizer_config.json"),
   ]);
-  const image = await store.read(files.image);
-  const text = await store.read(files.text);
+  const model: Model = { manifest, tokenizer: loadTokenizer(tokenizerJson, tokenizerConfig) };
 
   post({ type: "progress", message: "Starting the photo check…" });
-  let chosen = await pickBackend();
-  let sessions;
-  try {
-    sessions = await createSessions(image, text, chosen.backend);
-  } catch (error) {
-    if (chosen.backend !== "webgpu") throw error;
-    chosen = { backend: "wasm", fallbackReason: `WebGPU failed: ${String(error)}` };
-    sessions = await createSessions(image, text, "wasm");
-  }
+  chosen = await pickBackend();
+  await sessionFor(model, "image");
   const info: EncoderInfo = { ...chosen, loadMs: performance.now() - start };
   post({ type: "loaded", info });
-  return { manifest, tokenizer: loadTokenizer(tokenizerJson, tokenizerConfig), ...sessions };
+  return model;
 }
 
 /**
@@ -85,8 +108,10 @@ function unitVectors(data: Float32Array, dim: number): Float32Array[] {
   });
 }
 
-async function encodeText({ manifest, tokenizer, textSession }: Model, labels: string[]): Promise<Float32Array[]> {
+async function encodeText(model: Model, labels: string[]): Promise<Float32Array[]> {
+  const { manifest, tokenizer } = model;
   const { contextLength, embeddingDim } = manifest;
+  const textSession = await sessionFor(model, "text");
   const vectors: Float32Array[] = [];
   for (let i = 0; i < labels.length; i += TEXT_BATCH) {
     const batch = labels.slice(i, i + TEXT_BATCH);
@@ -97,8 +122,10 @@ async function encodeText({ manifest, tokenizer, textSession }: Model, labels: s
   return vectors;
 }
 
-async function encodeImage({ manifest, imageSession }: Model, image: Blob): Promise<Float32Array[]> {
+async function encodeImage(model: Model, image: Blob): Promise<Float32Array[]> {
+  const { manifest } = model;
   const { size, mean, std } = manifest.preprocess;
+  const imageSession = await sessionFor(model, "image");
   const bitmap = await createImageBitmap(image);
   const crop = centerCrop(bitmap.width, bitmap.height);
   const canvas = new OffscreenCanvas(size, size);

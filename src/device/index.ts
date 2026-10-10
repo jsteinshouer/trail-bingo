@@ -29,6 +29,7 @@ export type DeviceProblemCode =
   | "no-workers"
   | "no-wasm-simd"
   | "no-camera"
+  | "too-little-memory"
   | "slow-photo-check"
   | "low-memory"
   | "untested-browser"
@@ -54,8 +55,18 @@ export interface DeviceCheck {
 
 /** The model (~300 MB), a Card's facts and photos (25–40 MB), and headroom. */
 const STORAGE_NEEDED = 450e6;
-/** Below this, the photo check's model (about 600 MB once loaded) may not fit alongside the browser. */
-const MEMORY_RECOMMENDED_GB = 4;
+/**
+ * Phones with this much memory or less run the lighter photo check: one half of
+ * the model at a time, weights kept as fp16 (about 0.6 GB instead of 1.2 GB
+ * while it runs, at some cost in speed on the WebAssembly fallback).
+ */
+const LIGHT_PHOTO_CHECK_GB = 4;
+/** At this or less, even the lighter photo check won't fit alongside the browser. */
+const TOO_LITTLE_MEMORY_GB = 1;
+
+/** Whether this phone should run the lighter photo check. Unknown memory (only Chrome tells) gets the faster one. */
+export const lightPhotoCheck = (deviceMemoryGb: number | null) =>
+  deviceMemoryGb !== null && deviceMemoryGb <= LIGHT_PHOTO_CHECK_GB;
 
 const mb = (bytes: number) => Math.round(bytes / 1e6);
 
@@ -79,12 +90,19 @@ export function checkDevice(device: DeviceFeatures): DeviceCheck {
   if (!device.moduleWorkers) block("no-workers", "This browser can't run the photo check in the background. Try a recent Chrome.");
   if (!device.wasmSimd) block("no-wasm-simd", "This browser can't run the photo check's model. Try a recent Chrome.");
   if (!device.camera) block("no-camera", "This browser can't use a camera, and every Sighting is a photo.");
+  const memory = device.deviceMemoryGb;
+  if (memory !== null && memory <= TOO_LITTLE_MEMORY_GB) {
+    block("too-little-memory", "This phone doesn't have enough memory for the photo check, so the browser would close.");
+  }
 
   if (!device.webgpu) {
     warn("slow-photo-check", `The photo check will run more slowly on this phone: ${SLOW_PHOTO_CHECK}`);
   }
-  if (device.deviceMemoryGb !== null && device.deviceMemoryGb < MEMORY_RECOMMENDED_GB) {
-    warn("low-memory", "This phone has little memory, so the photo check may close the app. Close other apps before a hike.");
+  if (memory !== null && memory > TOO_LITTLE_MEMORY_GB && memory < LIGHT_PHOTO_CHECK_GB) {
+    warn(
+      "low-memory",
+      "This phone has little memory, so the photo check runs in a lighter, slower mode. Close other apps before a hike.",
+    );
   }
   if (!device.androidChrome) warn("untested-browser", "Trail Bingo is made for Chrome on Android, so some things may not work here.");
   if (!device.crossOriginIsolated) {
