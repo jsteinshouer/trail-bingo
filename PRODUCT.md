@@ -65,7 +65,7 @@ Existing ID apps are reference tools, and most need signal. Trail Bingo is a gam
 2. **Works with no signal.** Anything needed on the trail is downloaded and confirmed ready beforehand; nothing on the trail waits on the network.
 3. **Honest about certainty.** The app shows when it's sure (Verified) and when the player decided (Confirmed), and never pretends a guess is a match.
 4. **Learning is the reward.** Every matched Sighting teaches something short and true, with its source credited.
-5. **Safe and private by default.** Fungus fact cards always warn against eating based on the identification; location and photos stay on the phone.
+5. **Safe and private by default.** Fungus fact cards always warn against eating based on the identification; location and photos stay on the phone. The one exception is opt-in: the hike log (for tuning the photo check) is off until the player turns it on, keeps its copies on the phone, and leaves only when the player exports and shares it, with the menu saying it includes their photos.
 
 ## Accessibility & Inclusion
 
