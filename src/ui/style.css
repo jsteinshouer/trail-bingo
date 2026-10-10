@@ -423,6 +423,9 @@ button { font: inherit; color: inherit; }
 [data-state="failed"] .dl-label b { color: var(--contour-ink); }
 .dl-note { margin: 6px 0 0; font: 400 15px/1.45 var(--face-text); color: var(--ink-soft); max-width: 40ch; }
 .dl-note:empty { display: none; }
+.device:not(:empty) { margin-top: 14px; display: grid; gap: 8px; }
+.device h2 { margin: 0; font: 700 22px/1.1 var(--face-label); color: var(--contour-ink); }
+.device .hint { margin: 0; }
 
 /* ── New Card: the sheet's specifications, filled in before printing ── */
 .builder {

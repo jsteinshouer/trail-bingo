@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LocalSpecies } from "../game";
+import { NoSignalError } from "../signal";
 import { createInatSpeciesSource } from "./index";
 import plantsFungi from "./fixtures/plants-fungi.json";
 import animals from "./fixtures/animals.json";
@@ -144,6 +145,8 @@ describe("iNaturalist species source", () => {
       },
     });
 
-    await expect(source.speciesNear(QUERY)).rejects.toThrow(/iNaturalist/);
+    const failure = source.speciesNear(QUERY);
+    await expect(failure).rejects.toThrow(/iNaturalist/);
+    await expect(failure).rejects.toBeInstanceOf(NoSignalError);
   });
 });

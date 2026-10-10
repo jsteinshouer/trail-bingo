@@ -126,7 +126,7 @@ On the trail, fully offline, when I spot something I take a photo — a Sighting
   - Bingo detection on rows, columns and both diagonals for each size, multiple Bingos, Blackout
   - save and restore of a Card in progress
 - **Species source and fact source adapters:** tested against recorded HTTP responses (fixtures captured from real iNaturalist and Wikipedia calls), covering normal results, empty results and error responses. Tests check that responses are mapped into the game module's types correctly.
-- **Not unit-tested:** the real BioCLIP encoder, the camera, geolocation, the service worker and offline caching. These are checked by hand on the Android phone: the Day 1 spike for model load time, photo check time and tab stability; then the real hike.
+- **Not unit-tested:** the real BioCLIP encoder, the camera, geolocation, the service worker and offline caching. (The service worker's routing decisions, which requests it answers from the app shell, are a pure function with unit tests; the worker itself is still checked by hand.) These are checked by hand on the Android phone: the Day 1 spike for model load time, photo check time and tab stability; then the real hike.
 - **Prior art:** none. This is a new repository, and these tests set the pattern.
 
 ## Out of Scope

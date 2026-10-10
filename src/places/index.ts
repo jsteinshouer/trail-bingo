@@ -5,6 +5,7 @@
  */
 
 import type { Place } from "../game";
+import { NoSignalError } from "../signal";
 
 const API = "https://nominatim.openstreetmap.org/search";
 
@@ -87,7 +88,7 @@ export function createPlaceSearch({ fetch }: { fetch: typeof globalThis.fetch })
       try {
         response = await fetch(url);
       } catch {
-        throw new Error("Couldn't reach the place search. Check your connection, then try again.");
+        throw new NoSignalError("Couldn't reach the place search. Check your connection, then try again.");
       }
       if (!response.ok) throw new Error(`The place search couldn't answer (HTTP ${response.status}). Try again in a minute.`);
       const places = ((await response.json()) as NominatimResult[])

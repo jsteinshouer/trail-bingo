@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { NoSignalError } from "../signal";
 import { createPlaceSearch } from "./index";
 import platteRiver from "./fixtures/search-platte-river.json";
 import elkhorn from "./fixtures/search-elkhorn.json";
@@ -114,6 +115,8 @@ describe("searching for a place by name", () => {
       },
     });
 
-    await expect(search.search("Moab")).rejects.toThrow(/couldn't reach/i);
+    const failure = search.search("Moab");
+    await expect(failure).rejects.toThrow(/couldn't reach/i);
+    await expect(failure).rejects.toBeInstanceOf(NoSignalError);
   });
 });
