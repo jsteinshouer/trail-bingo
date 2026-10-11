@@ -1,0 +1,67 @@
+name: Deploy
+
+# Publishes the app to Netlify. The model isn't part of it: the app downloads it
+# from the Hugging Face repository in the MODEL_URL variable (see docs/deploy.md).
+# Each production deploy uses Netlify credits, so this runs on pushes to main
+# and by hand, not for pull requests.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Check the settings
+        env:
+          MODEL_URL: ${{ vars.MODEL_URL }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          missing=""
+          [ -n "$MODEL_URL" ] || missing="$missing MODEL_URL (variable)"
+          [ -n "$NETLIFY_AUTH_TOKEN" ] || missing="$missing NETLIFY_AUTH_TOKEN (secret)"
+          [ -n "$NETLIFY_SITE_ID" ] || missing="$missing NETLIFY_SITE_ID (secret)"
+          if [ -n "$missing" ]; then echo "::error::Missing:$missing. See docs/deploy.md."; exit 1; fi
+          case "$MODEL_URL" in */) ;; *) echo "::error::MODEL_URL must end with /"; exit 1 ;; esac
+
+      - name: Check the model is reachable from a browser
+        env:
+          MODEL_URL: ${{ vars.MODEL_URL }}
+        run: |
+          headers=$(curl -sSfIL -H "Origin: https://example.netlify.app" "${MODEL_URL}manifest.json")
+          echo "$headers" | grep -qi '^access-control-allow-origin' || { echo "::error::${MODEL_URL}manifest.json doesn't allow cross-origin downloads"; exit 1; }
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Build
+        env:
+          VITE_MODEL_URL: ${{ vars.MODEL_URL }}
+        run: npm run build
+
+      # public/models/ is git-ignored, so the build shouldn't carry the model; make sure.
+      - name: Check the model isn't in the build
+        run: test ! -e dist/models
+
+      - name: Deploy to Netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: npx --yes netlify-cli@27.12.0 deploy --prod --dir dist --no-build --message "${{ github.sha }}"
