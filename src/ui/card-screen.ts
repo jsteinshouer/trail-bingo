@@ -1,4 +1,4 @@
-import type { CardState, Game, Mark, MarkedSquare, MarkOutcome } from "../game";
+import { squareName, type CardState, type Game, type Mark, type MarkedSquare, type MarkOutcome } from "../game";
 import {
   glyph,
   ICON_CAMERA,
@@ -12,7 +12,7 @@ import {
   KIND_LABEL,
   kindOf,
 } from "./icons";
-import { mountSighting } from "./sighting";
+import { mountSighting, type SightingRecorder } from "./sighting";
 import { factCard, photoCredit, photoUrl, referencePhoto, releasePhotos } from "./fact-card";
 import {
   esc,
@@ -49,8 +49,27 @@ export interface PhotoCheck {
   encodeImage(image: Blob): Promise<Float32Array>;
 }
 
+export interface CardScreenOptions {
+  onNewCard(): void;
+  /** Keeps a record of each Sighting for the hike log. */
+  record?: SightingRecorder;
+  /** The optional hike log: off until the player turns it on. */
+  hikeLog?: HikeLogControls;
+}
+
+export interface HikeLogControls {
+  isOn(): boolean;
+  /** Starts a fresh log. */
+  start(): Promise<void>;
+  /** Stops the log and deletes it, photos and all. */
+  stop(): Promise<void>;
+  count(): Promise<number>;
+  /** Saves the log as a file to share. */
+  export(): Promise<void>;
+}
+
 /** The on-trail Card screen: the sheet, its collars, Square detail, Sightings and celebrations. */
-export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: PhotoCheck, options: { onNewCard(): void }) {
+export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: PhotoCheck, options: CardScreenOptions) {
   let cells: HTMLButtonElement[] = [];
   let openIndex: number | null = null;
   let lastFocus: HTMLElement | null = null;
@@ -59,7 +78,12 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     <header class="collar-top">
       <h1 class="quad-name" data-place></h1>
       <div class="quad-meta" data-meta></div>
-      <button class="menu-btn" type="button" aria-label="New Card" data-new-card>${ICON_GRID}</button>
+      <button class="menu-btn" type="button" aria-label="Card menu" aria-haspopup="menu" aria-expanded="false" data-menu>${ICON_GRID}</button>
+      <div class="card-menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-new-card>New Card</button>
+        <div class="hike-log-items"></div>
+        <p class="menu-note" aria-live="polite"></p>
+      </div>
     </header>
     <div class="sheet-wrap">
       <div class="coords" aria-hidden="true"><span data-north></span><span data-size-tag></span><span data-east></span></div>
@@ -97,6 +121,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
   const saveNotice = $(".save-problem");
 
   const sighting = mountSighting(root, game, {
+    record: options.record,
     encodeImage: (image) => photoCheck.encodeImage(image),
     onMarked(index, outcome) {
       // A Sighting that can't be kept on the phone says so; the Card still has it until the app closes.
@@ -121,7 +146,79 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
     onClose: () => take.focus(),
   });
   take.addEventListener("click", sighting.open);
-  $("[data-new-card]").addEventListener("click", () => options.onNewCard());
+  /* ── The Card menu ─────────────────────────────────────────────── */
+
+  const menuButton = $<HTMLButtonElement>("[data-menu]");
+  const menu = $(".card-menu");
+  const menuNote = $(".menu-note");
+
+  function openMenu() {
+    menu.hidden = false;
+    menuButton.setAttribute("aria-expanded", "true");
+    menuNote.textContent = "";
+    renderHikeLogItems();
+    menu.querySelector<HTMLElement>("button")!.focus();
+  }
+
+  function closeMenu() {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    menuButton.setAttribute("aria-expanded", "false");
+  }
+
+  menuButton.addEventListener("click", () => (menu.hidden ? openMenu() : closeMenu()));
+  $("[data-new-card]").addEventListener("click", () => {
+    closeMenu();
+    options.onNewCard();
+  });
+  /** The hike log's menu items: one to turn it on, or, once it's on, export and stop. */
+  function renderHikeLogItems() {
+    const log = options.hikeLog;
+    const items = $(".hike-log-items");
+    if (!log) return void (items.innerHTML = "");
+    if (!log.isOn()) {
+      items.innerHTML = `<button type="button" role="menuitem" data-log-start>Keep a hike log
+        <small>Saves each Sighting and its photo on this phone, to share later for tuning the photo check.</small></button>`;
+      return;
+    }
+    items.innerHTML = `<button type="button" role="menuitem" data-log-export>Export hike log<small>Includes your Sighting photos.</small></button>
+      <button type="button" role="menuitem" data-log-stop>Stop and delete hike log</button>`;
+    log.count().then(
+      (n) => {
+        const small = items.querySelector("[data-log-export] small");
+        if (small) small.textContent = `${n === 1 ? "1 Sighting" : `${n} Sightings`}, with their photos.`;
+      },
+      () => {},
+    );
+  }
+
+  $(".hike-log-items").addEventListener("click", async (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>("button");
+    const log = options.hikeLog;
+    if (!button || !log) return;
+    try {
+      if ("logStart" in button.dataset) {
+        await log.start();
+        menuNote.textContent = "Keeping a hike log from now on.";
+      } else if ("logStop" in button.dataset) {
+        await log.stop();
+        menuNote.textContent = "The hike log is stopped and deleted.";
+      } else if ("logExport" in button.dataset) {
+        menuNote.textContent = "Getting the hike log ready…";
+        await log.export();
+        menuNote.textContent = "";
+        return closeMenu();
+      }
+      renderHikeLogItems();
+    } catch (error) {
+      // Closing the share sheet without choosing an app isn't a problem.
+      menuNote.textContent =
+        error instanceof Error && error.name === "AbortError" ? "" : `That didn't work: ${messageOf(error)}`;
+    }
+  });
+  addEventListener("click", (event) => {
+    if (!menu.contains(event.target as Node) && !menuButton.contains(event.target as Node)) closeMenu();
+  });
 
   // The band says what the photo check is doing until it's ready for Sightings.
   const takeLabel = take.querySelector(".label")!;
@@ -295,7 +392,7 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
   function renderDetail() {
     const index = openIndex!;
     const square: MarkedSquare = game.state().squares[index];
-    const name = square.kind === "wildcard" ? "Wildcard" : square.name;
+    const name = squareName(square);
 
     let meta: string;
     let body = "";
@@ -355,7 +452,9 @@ export function mountCardScreen(root: HTMLElement, game: Game, photoCheck: Photo
 
   $(".scrim").addEventListener("click", closeDetail);
   addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeDetail();
+    if (e.key !== "Escape") return;
+    closeMenu();
+    closeDetail();
   });
   addEventListener("popstate", hideDetail);
 

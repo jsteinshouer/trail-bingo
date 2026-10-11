@@ -1,4 +1,5 @@
-import type { Game, MarkOutcome, SightingOutcome, Taxon } from "../game";
+import { squareName, type CheckedSighting, type Game, type MarkOutcome, type SightingOutcome, type Taxon } from "../game";
+import type { CheckTiming, GuessResolution } from "../hike-log";
 import { glyph, ICON_CAMERA, ICON_CLOSE } from "./icons";
 import { factCard } from "./fact-card";
 import { esc, looksLike, messageOf, namedTaxon, secondLine, taxonName } from "./text";
@@ -13,6 +14,17 @@ export interface SightingOptions {
   onMarked(index: number, outcome: MarkOutcome): void;
   /** Called when the overlay closes, so focus can go back to where it came from. */
   onClose(): void;
+  /** Keeps a record of each Sighting, for tuning the photo check after a hike. */
+  record?: SightingRecorder;
+}
+
+export interface SightingRecorder {
+  /** A Sighting was checked: its answer and working, its photo, and how long the check took. */
+  checked(outcome: CheckedSighting, photo: Blob, timing: CheckTiming): void;
+  /** The photo check couldn't check a Sighting. */
+  failed(error: unknown, photo: Blob, timing: CheckTiming): void;
+  /** The player picked one of an unsure Sighting's guesses, or none. */
+  resolved(resolution: GuessResolution): void;
 }
 
 /**
@@ -55,6 +67,15 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
   let open = false;
   /** The species each offered guess looks like, by Square, so a pick records it. */
   let guessTaxa = new Map<number, Taxon>();
+  /** Guesses are showing and the player hasn't picked one or turned them down yet. */
+  let awaitingPick = false;
+
+  /** Records what became of the guesses, once. */
+  function settleGuesses(resolution: GuessResolution) {
+    if (!awaitingPick) return;
+    awaitingPick = false;
+    options.record?.resolved(resolution);
+  }
 
   function show(html: string) {
     body.innerHTML = html;
@@ -63,6 +84,7 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
   }
 
   async function startCamera() {
+    settleGuesses({ dismissed: true });
     discardPhoto();
     guessTaxa = new Map();
     still.hidden = true;
@@ -128,11 +150,21 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
     checking.hidden = false;
     shutter.hidden = true;
     show("");
+    const started = performance.now();
+    let encoded = started;
+    const timing = () => ({ encodeMs: encoded - started, matchMs: encoded === started ? 0 : performance.now() - encoded });
     try {
+      const vector = await options.encodeImage(taken);
+      encoded = performance.now();
       // A sure match marks its Square with the photo.
-      const outcome = await game.sighting(await options.encodeImage(taken), taken);
+      const outcome = await game.sighting(vector, taken);
+      options.record?.checked(outcome, taken, timing());
+      // Guesses the player never saw (the camera closed meanwhile) aren't waiting on them.
+      awaitingPick = open && outcome.kind === "unsure";
       if (open) showOutcome(outcome);
     } catch (error) {
+      if (encoded === started) encoded = performance.now();
+      options.record?.failed(error, taken, timing());
       if (open) showError(error);
     } finally {
       checking.hidden = true;
@@ -143,7 +175,7 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
     const squares = game.state().squares;
     const nameOf = (index: number) => {
       const square = squares[index];
-      return square.kind === "wildcard" ? "Wildcard" : square.name;
+      return squareName(square);
     };
     const again = '<button class="btn" type="button" data-retry>Take another</button>';
     const done = '<button class="btn" type="button" data-close>Back to the Card</button>';
@@ -204,6 +236,7 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
     if (!button) return;
     if (button.dataset.pick !== undefined) {
       const index = Number(button.dataset.pick);
+      settleGuesses({ picked: squareName(game.state().squares[index]) });
       markWith(index, game.mark(index, "confirmed", { found: guessTaxa.get(index), photo: photo ?? undefined }));
     } else if ("retry" in button.dataset) {
       startCamera();
@@ -227,6 +260,7 @@ export function mountSighting(root: HTMLElement, game: Game, options: SightingOp
   function close(fromHistory = false) {
     if (!open) return;
     open = false;
+    settleGuesses({ dismissed: true });
     stopCamera();
     discardPhoto();
     overlay.hidden = true;

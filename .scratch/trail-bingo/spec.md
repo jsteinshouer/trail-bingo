@@ -97,6 +97,7 @@ On the trail, fully offline, when I spot something I take a photo — a Sighting
   - **Encoder adapter** — turns text labels and images into L2-normalized vectors using BioCLIP, running in the Web Worker.
   - **Store adapter** — saves and loads the active Card, its marks and Sighting photos in IndexedDB.
   - **Place search** — turns a place name into coordinates (a geocoding lookup) or uses device geolocation.
+  - **Hike log** (added in ticket 11) — an opt-in record of each Sighting (the photo check's top matches, gap, outcome, timing, battery, photo) and screen time, kept on the phone in its own IndexedDB database and exported as one JSON file from the Card menu, for tuning the confidence threshold from real photos.
   - **UI** — setup/download screen, Card builder, Card grid, in-page camera/Sighting flow, top-guesses picker, fact card, celebrations.
 - **Camera:** Sightings are taken with an in-page live camera (a square preview showing exactly the area the model sees, and a capture button), not Android's camera app. Opening the camera app puts Chrome in the background, and in the spike Chrome discarded and reloaded the page, losing the loaded model.
 - **Card generation rules:**

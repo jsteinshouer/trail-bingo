@@ -142,6 +142,8 @@ export interface Store {
 }
 
 export interface CardState {
+  /** The Card's id, when it was built rather than loaded by hand. */
+  id?: string;
   place: Place;
   month: number;
   size: CardSize;
@@ -159,6 +161,16 @@ export interface MarkOutcome {
   newBingos: number[][];
   /** This mark filled the last open Square. */
   blackout: boolean;
+}
+
+/** How the photo check reached its answer: for tuning the threshold from real Sightings. */
+export interface SightingCheck {
+  /** The best matches, best first: a species and the Square it fills (null when it's off the Card). */
+  matches: { taxon: Taxon; square: number | null; score: number }[];
+  /** How far the best match led the next. */
+  gap: number;
+  /** The lead it needed to be sure. */
+  threshold: number;
 }
 
 /** What a Sighting turned out to be. */

@@ -1,4 +1,5 @@
 import { NO_PROGRESS, type Card, type SavedGame, type SavedProgress, type Store } from "../game";
+import { committed, opener, settled } from "../idb";
 
 /**
  * The active Card, kept on the phone in IndexedDB. Two records: the Card with
@@ -12,35 +13,8 @@ const RECORDS = "game";
 const CARD = "card";
 const PROGRESS = "progress";
 
-/** An IndexedDB request as a promise. */
-const settled = <T>(request: IDBRequest<T>) =>
-  new Promise<T>((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-
-/** A transaction's end: writes count once it completes, not when each request succeeds. */
-const committed = (transaction: IDBTransaction) =>
-  new Promise<void>((resolve, reject) => {
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-    transaction.onabort = () => reject(transaction.error ?? new Error("Saving on the phone was cancelled"));
-  });
-
 export function createIndexedDbStore(): Store {
-  let database: Promise<IDBDatabase> | null = null;
-
-  function open(): Promise<IDBDatabase> {
-    database ??= new Promise((resolve, reject) => {
-      const request = indexedDB.open(DATABASE, VERSION);
-      request.onupgradeneeded = () => request.result.createObjectStore(RECORDS);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    // A failed open is tried again next time.
-    database.catch(() => (database = null));
-    return database;
-  }
+  const open = opener(DATABASE, VERSION, (database) => database.createObjectStore(RECORDS));
 
   async function write(records: [string, unknown][]) {
     const transaction = (await open()).transaction(RECORDS, "readwrite");

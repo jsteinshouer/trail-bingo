@@ -9,6 +9,7 @@ import type {
   Mark,
   MarkOutcome,
   SavedProgress,
+  SightingCheck,
   SightingDetails,
   SightingOutcome,
   SpeciesSource,
@@ -17,8 +18,17 @@ import type {
   Taxon,
 } from "./types";
 
+/** A Square's name, as the player sees it. */
+export const squareName = (square: Square) => (square.kind === "wildcard" ? "Wildcard" : square.name);
+
+/** A Sighting's outcome with the photo check's working. */
+export type CheckedSighting = SightingOutcome & { check: SightingCheck };
+
 /** Progress on a Card nobody has played yet. */
 export const NO_PROGRESS: SavedProgress = { marks: [], found: [], photos: [] };
+
+/** How many of the best matches a Sighting's check reports. */
+const CHECK_MATCHES = 5;
 
 /** Labels per encoder call while building a Card, so progress can be shown between calls. */
 const LABEL_BATCH = 32;
@@ -89,7 +99,7 @@ export interface Game {
    * sure match to a local species off the Card fills the open Wildcard;
    * nothing else changes the Card.
    */
-  sighting(vector: Float32Array, photo?: Blob): Promise<SightingOutcome>;
+  sighting(vector: Float32Array, photo?: Blob): Promise<CheckedSighting>;
   /** Settles when the marks so far are saved on the phone, or rejects if the last save failed. */
   saved(): Promise<void>;
   /** The active Card and its marks. */
@@ -176,9 +186,10 @@ export function createGame({ encoder, species, facts, store, now = () => new Dat
   }
 
   function state(): CardState {
-    const { place, month, size, squares } = active();
+    const { id, place, month, size, squares } = active();
     const complete = bingos();
     return {
+      ...(id && { id }),
       place,
       month,
       size,
@@ -294,7 +305,15 @@ export function createGame({ encoder, species, facts, store, now = () => new Dat
       const ranked = rank(vector, list, vectors);
       const [best, next] = ranked;
       // With nothing else to compare against, a lone candidate is a sure match.
-      if (best.score - (next?.score ?? -1) >= VERIFIED_GAP) {
+      const gap = best.score - (next?.score ?? -1);
+      const check: SightingCheck = {
+        matches: ranked.slice(0, CHECK_MATCHES).map(({ taxon, square, score }) => ({ taxon, square, score })),
+        gap,
+        threshold: VERIFIED_GAP,
+      };
+      return { ...(gap >= VERIFIED_GAP ? sure() : unsure()), check };
+
+      function sure(): SightingOutcome {
         const { square, taxon } = best;
         if (square === null) {
           // Anything living the photo check is sure of counts for the Wildcard.
@@ -306,8 +325,11 @@ export function createGame({ encoder, species, facts, store, now = () => new Dat
         if (marks[square]) return { kind: "already-marked", index: square, taxon };
         return { kind: "verified", index: square, taxon, mark: mark(square, "verified", { found: taxon, photo }) };
       }
-      const open = ranked.flatMap(({ square, taxon }) => (square === null || marks[square] ? [] : [{ index: square, taxon }]));
-      return { kind: "unsure", guesses: open.slice(0, 3) };
+
+      function unsure(): SightingOutcome {
+        const open = ranked.flatMap(({ square, taxon }) => (square === null || marks[square] ? [] : [{ index: square, taxon }]));
+        return { kind: "unsure", guesses: open.slice(0, 3) };
+      }
     },
 
     state,
