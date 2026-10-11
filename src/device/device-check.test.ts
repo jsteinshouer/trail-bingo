@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkDevice, type DeviceFeatures } from "./index";
+import { checkDevice, lightPhotoCheck, type DeviceFeatures } from "./index";
 
 /** A phone that has everything: Chrome on Android with WebGPU and plenty of room. */
 const GOOD: DeviceFeatures = {
@@ -61,6 +61,19 @@ describe("the first-launch device check", () => {
     expect(checkDevice({ ...GOOD, deviceMemoryGb: null }).warnings).toEqual([]);
   });
 
+  it("blocks the download on a phone with too little memory for even the lighter photo check", () => {
+    expect(codes(checkDevice({ ...GOOD, deviceMemoryGb: 1 }).blockers)).toEqual(["too-little-memory"]);
+    expect(checkDevice({ ...GOOD, deviceMemoryGb: 1 }).warnings).toEqual([]);
+    expect(checkDevice({ ...GOOD, deviceMemoryGb: 2 }).blockers).toEqual([]);
+  });
+
+  it("knows which phones need the lighter photo check", () => {
+    expect(lightPhotoCheck(2)).toBe(true);
+    expect(lightPhotoCheck(4)).toBe(true);
+    expect(lightPhotoCheck(8)).toBe(false);
+    expect(lightPhotoCheck(null)).toBe(false);
+  });
+
   it("explains every problem in words a hiker can act on", () => {
     const worst: DeviceFeatures = {
       secureContext: false,
@@ -76,8 +89,8 @@ describe("the first-launch device check", () => {
     };
     const { blockers, warnings } = checkDevice(worst);
 
-    expect(blockers).toHaveLength(6);
-    expect(warnings).toHaveLength(4);
+    expect(blockers).toHaveLength(7);
+    expect(warnings).toHaveLength(3);
     for (const problem of [...blockers, ...warnings]) expect(problem.message).toMatch(/^[A-Z].+\.$/);
   });
 });

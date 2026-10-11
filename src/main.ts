@@ -18,8 +18,19 @@ const web = { fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(inp
 let photoCheck: BioclipEncoder | null = null;
 const startPhotoCheck = () => (photoCheck ??= createBioclipEncoder());
 
-/** A label to encode once after the download, proving the photo check runs here. */
-const WARM_UP_LABEL = "a photo of Achillea millefolium, Common yarrow.";
+/**
+ * A plain grey photo for the photo check to look at: after the download, to
+ * prove it runs here, and after building a Card, to bring the image half of
+ * the model back before the first Sighting (only one half fits in memory at once).
+ */
+function blankPhoto(): Promise<Blob> {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 224;
+  const context = canvas.getContext("2d")!;
+  context.fillStyle = "#808080";
+  context.fillRect(0, 0, 224, 224);
+  return new Promise((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("No photo"))), "image/png"));
+}
 
 /** The game: the Card screen, with the Card builder over it until there's a Card. */
 function startGame() {
@@ -36,7 +47,12 @@ function startGame() {
     locate: currentPosition,
     search: createPlaceSearch(web).search,
     photoCheck: encoder.ready,
-    onBuilt: () => screen.render(),
+    onBuilt() {
+      screen.render();
+      blankPhoto()
+        .then((photo) => encoder.encodeImage(photo))
+        .catch(() => {});
+    },
   });
   // A Card saved on the phone comes back as it was; without one, it's time to build one.
   game.restore().then(
@@ -65,7 +81,7 @@ else
       const encoder = startPhotoCheck();
       try {
         const info = await encoder.ready;
-        await encoder.encodeText([WARM_UP_LABEL]);
+        await encoder.encodeImage(await blankPhoto());
         return info;
       } catch (error) {
         // Trying again starts a fresh photo check.
